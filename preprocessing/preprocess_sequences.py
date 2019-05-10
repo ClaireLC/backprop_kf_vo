@@ -8,8 +8,8 @@ from skimage import data, color, io, img_as_ubyte
 from skimage.transform import rescale, resize, downscale_local_mean
 
 def preprocess_img(seq_name, cam_name, img_name, prev_img_name):
-  path_to_kitti = "/home/clairechen/KITTI/dataset/sequences/"
-  save_path = "/home/clairechen/KITTI/dataset_post/sequences/"
+  path_to_kitti = "/mnt/disks/dataset/dataset/sequences/"
+  save_path = "/mnt/disks/dataset/dataset_post/sequences/"
   
   if not os.path.exists(save_path):
     os.makedirs(save_path)
@@ -74,7 +74,7 @@ def main():
     5: 1,
     6: 1,
     7: 1,
-    8: 1101,
+    8: 1,
     9: 1,
     10: 1
     }
@@ -88,26 +88,27 @@ def main():
     5: 2760,
     6: 1100,
     7: 1100,
-    8: 5170,
+    8: 4070,
     9: 1590,
     10: 1200
     }
   
   num_digits = 6
   
-  seq_num = 3
+  seq_num = 0
   
   cam_name = "image_2"
   
-  for cam_name in ["image_2", "image_3"]:
-    for curr_im_num in range(start_img_num[seq_num], last_img_num[seq_num] + 1):
-      curr_im_name = str(curr_im_num).zfill(num_digits) + ".png"
-      prev_im_name = str(curr_im_num - 1).zfill(num_digits) + ".png"
-      seq_num_str = str(seq_num).zfill(2)
-      
-      args = "args: " + seq_num_str + " " + cam_name + " " + curr_im_name + " " + prev_im_name
-      print(args)
-      preprocess_img(seq_num_str, cam_name, curr_im_name, prev_im_name)
+  for seq_num in range(8,11):
+    for cam_name in ["image_2", "image_3"]:
+      for curr_im_num in range(start_img_num[seq_num], last_img_num[seq_num] + 1):
+        curr_im_name = str(curr_im_num).zfill(num_digits) + ".png"
+        prev_im_name = str(curr_im_num - 1).zfill(num_digits) + ".png"
+        seq_num_str = str(seq_num).zfill(2)
+        
+        args = "args: " + seq_num_str + " " + cam_name + " " + curr_im_name + " " + prev_im_name
+        print(args)
+        preprocess_img(seq_num_str, cam_name, curr_im_name, prev_im_name)
 
 if __name__ == "__main__":
   main()
