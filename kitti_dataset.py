@@ -2,6 +2,7 @@ import os
 import torch
 import numpy as np
 from torch.utils.data import Dataset, DataLoader
+from torchvision import transforms, utils
 from skimage import io
 import matplotlib.pyplot as plt
 
@@ -13,22 +14,23 @@ class KittiDataset(Dataset):
     "curr_img": current image,
     "diff_img": difference image,
     "pose": 4x4 transformation matrix,
-    "for_vel": forward velocity,
-    "ang_vel": angular velocity,
+    "vel": [forward velocity, angular velocity]
     }
   """
 
-  def __init__(self, seq_dir, poses_dir, oxts_dir):
+  def __init__(self, seq_dir, poses_dir, oxts_dir, transform=None):
     """
     Args:
       seq_dir: path to root directory of preprocessed trajectory sequences
       poses_dir: path to root directory of ground truth poses
       oxts_dir: path to root directory of ground truth GPS/IMU data, which contain velocities
+      trnasform: optional transform to be applied on a sample
     """
     
     self.seq_dir = seq_dir
     self.oxts_dir = oxts_dir
     self.poses_dir = poses_dir
+    self.transform = transform
 
     self.seq_len = {
       0: 4540,
@@ -52,7 +54,7 @@ class KittiDataset(Dataset):
       end = prev + 2 * self.seq_len[i]
       self.seq_ranges[i] = (start,end)  
       prev = end
-    print(self.seq_ranges)
+    #print(self.seq_ranges)
 
   def __len__(self):
     total_len = 0
@@ -80,7 +82,7 @@ class KittiDataset(Dataset):
       frame_num = idx - self.seq_ranges[seq_num][0] - self.seq_len[seq_num] + 1
       cam_num = "image_3"
     
-    print(seq_num, frame_num, cam_num)
+    #print(seq_num, frame_num, cam_num)
 
     # Get current and difference images
     frame_digits = 6
@@ -110,7 +112,7 @@ class KittiDataset(Dataset):
     oxts_file_digits = 10
     oxts_file_str = str(frame_num).zfill(oxts_file_digits)
     oxts_file_path = self.oxts_dir + seq_num_str + "/data/" + oxts_file_str + ".txt"
-    print(oxts_file_path)
+    #print(oxts_file_path)
     
     for_vel_line_num = 7
     ang_vel_line_num = 18
@@ -124,29 +126,52 @@ class KittiDataset(Dataset):
     oxts_data = [float(s) for s in line[0].split(" ")]
     for_vel = oxts_data[for_vel_line_num]
     ang_vel = oxts_data[ang_vel_line_num]
-    print(oxts_data)
+    #print(oxts_data)
     #print(for_vel, ang_vel)
 
     # Format sample
     sample= {
             "curr_im": curr_im,
             "diff_im": diff_im,
-            "pose": pose,
-            "for_vel": for_vel,
-            "ang_vel": ang_vel,
+            "pose": np.asarray(pose),
+            "vel": np.asarray([for_vel,ang_vel]),
             }
-    #print(sample)
+    if self.transform:
+      sample = self.transform(sample)
 
-    return
+    return sample
+
+class ToTensor(object):
+  """ Convert ndarrays in sample to Tensors. """
+    
+  def __call__(self, sample):
+    curr_im = sample["curr_im"]
+    diff_im = sample["diff_im"]
+    pose    = sample["pose"]
+    vel = sample["vel"]
+
+    # Swap image axes because
+    # numpy image: H x W x C
+    # torch image: C x H x W
+    curr_im = curr_im.transpose((2,0,1))
+    diff_im = diff_im.transpose((2,0,1))
+
+    return {
+            "curr_im": torch.from_numpy(curr_im),
+            "diff_im": torch.from_numpy(diff_im),
+            "pose":    torch.from_numpy(pose),
+            "vel":     torch.from_numpy(vel),
+            }
     
 def main():
   seq_dir = "/mnt/disks/dataset/dataset_post/sequences/"
   poses_dir = "/mnt/disks/dataset/dataset/poses/"
   oxts_dir = "/mnt/disks/dataset/dataset_post/oxts/"
-  dataset = KittiDataset(seq_dir, poses_dir, oxts_dir)
-  print(len(dataset))
+  dataset = KittiDataset(seq_dir, poses_dir, oxts_dir, transform=transforms.Compose([ToTensor()]))
+  #print(len(dataset))
 
   sample = dataset[0]
+  print(sample)
   #sample = dataset[46380 - 1]
 
 if __name__ == "__main__":

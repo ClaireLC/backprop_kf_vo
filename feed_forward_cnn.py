@@ -9,7 +9,7 @@ class Flatten(nn.Module):
 
 class FeedForwardCNN(nn.Module):
 
-  def __init__(self, image_channels=6, image_dims=np.array([150, 50]), z_dim=2, output_covariance=False):
+  def __init__(self, image_channels=6, image_dims=np.array([150, 50]), z_dim=2, output_covariance=False, batch_size = 1):
     super(FeedForwardCNN, self).__init__()
 
     # Set output vector size based on dimension of z and if covariance is required
@@ -79,7 +79,8 @@ class FeedForwardCNN(nn.Module):
                   groups=1,
                   bias=True),
         nn.ReLU(),
-        nn.LayerNorm(H_1*W_1, eps=1e-05, elementwise_affine=True),
+        nn.LayerNorm([batch_size, 16, 50, 150], eps=1e-05, elementwise_affine=True),
+        #nn.LayerNorm(H_1*W_1, eps=1e-05, elementwise_affine=True),
 
         # conv2
         nn.Conv2d(in_channels=conv2_in,
@@ -91,7 +92,8 @@ class FeedForwardCNN(nn.Module):
                   groups=1,
                   bias=True),
         nn.ReLU(),
-        nn.LayerNorm(H_2*W_2, eps=1e-05, elementwise_affine=True),
+        nn.LayerNorm([batch_size, 16, 26, 150], eps=1e-05, elementwise_affine=True),
+        #nn.LayerNorm(H_2*W_2, eps=1e-05, elementwise_affine=True),
 
         # conv3
         nn.Conv2d(in_channels=conv3_in,
@@ -103,7 +105,8 @@ class FeedForwardCNN(nn.Module):
                   groups=1,
                   bias=True),
         nn.ReLU(),
-        nn.LayerNorm(H_3*W_3, eps=1e-05, elementwise_affine=True),
+        #nn.LayerNorm(H_3*W_3, eps=1e-05, elementwise_affine=True),
+        nn.LayerNorm([batch_size, 16, 17, 150], eps=1e-05, elementwise_affine=True),
 
         # conv4
         nn.Conv2d(in_channels=conv4_in,
@@ -115,11 +118,13 @@ class FeedForwardCNN(nn.Module):
                   groups=1,
                   bias=True),
         nn.ReLU(),
-        nn.LayerNorm(H_4*W_4, eps=1e-05, elementwise_affine=True),
+        nn.LayerNorm([batch_size, 16, 10, 76], eps=1e-05, elementwise_affine=True),
+        #nn.LayerNorm(H_4*W_4, eps=1e-05, elementwise_affine=True),
         nn.Dropout(p=0.9),
-
+        Flatten(),
         # Fully connected layers
-        nn.Linear(conv4_out*H_4*W_4, 128, bias=True),
+        nn.Linear(12160, 128, bias=True),
+        #nn.Linear(conv4_out*H_4*W_4, 128, bias=True),
         nn.Linear(128, 128, bias=True),
         nn.Linear(128, output_dim, bias=True)
       )
