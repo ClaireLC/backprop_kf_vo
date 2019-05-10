@@ -9,7 +9,7 @@ class Flatten(nn.Module):
 
 class FeedForwardCNN(nn.Module):
 
-  def __init__(self, image_channels=3, image_dims=np.array((128, 128)), z_dim=2, output_covariance=False):
+  def __init__(self, image_channels=6, image_dims=np.array([150, 50]), z_dim=2, output_covariance=False):
     super(FeedForwardCNN, self).__init__()
 
     # Set output vector size based on dimension of z and if covariance is required
@@ -23,59 +23,114 @@ class FeedForwardCNN(nn.Module):
       output_dim = z_dim
 
     # Intermediate channel definitions
-    conv_kernel_size = 9
-    conv_stride = 2
-    pool_kernel_size = 2
-    pool_stride = 2
-    channel_1 = 32
-    pad_1 = 4
-    channel_2 = 64
-    pad_2 = 8
-    H_1 = int(1+(image_dims[0]-conv_kernel_size+2*pad_1)/conv_stride)
-    H_1max = int(H_1/2)
-    H_2 = int(1+(H_1max-conv_kernel_size+2*pad_2)/conv_stride)
-    H_2max = int(H_2/2)
+    # conv 1
+    conv1_in = image_channels
+    conv1_kernel_size = (7,7)
+    conv1_stride = (1,1)
+    conv1_pad = (3,3)
+    conv1_out = 16
+
+    # conv2
+    conv2_in = conv1_out
+    conv2_kernel_size = (5,5)
+    conv2_stride = (2,1)
+    conv2_pad = (3,2)
+    conv2_out = 16
+
+    # conv3
+    conv3_in = conv2_out
+    conv3_kernel_size = (5,5)
+    conv3_stride = (2,1)
+    conv3_pad = (6,2)
+    conv3_out = 16
+
+    # conv3
+    conv4_in = conv3_out
+    conv4_kernel_size = (5,5)
+    conv4_stride = (2,2)
+    conv4_pad = (3,3)
+    conv4_out = 16
+
+    H_1 = int(1+(image_dims[1]-conv1_kernel_size[1]+2*conv1_pad[1])/conv1_stride[1])
+    W_1 = int(1+(image_dims[0]-conv1_kernel_size[0]+2*conv1_pad[0])/conv1_stride[0])
+    print(W_1, H_1)
+
+    H_2 = int(1+(H_1-conv2_kernel_size[1]+2*conv2_pad[1])/conv2_stride[1])
+    W_2 = int(1+(W_1-conv2_kernel_size[0]+2*conv2_pad[0])/conv2_stride[0])
+    print(W_2, H_2)
+
+    H_3 = int(1+(H_2-conv3_kernel_size[1]+2*conv3_pad[1])/conv3_stride[1])
+    W_3 = int(1+(W_2-conv3_kernel_size[0]+2*conv3_pad[0])/conv3_stride[0])
+    print(W_3, H_3)
+
+    H_4 = int(1+(H_3-conv4_kernel_size[1]+2*conv4_pad[1])/conv4_stride[1])
+    W_4 = int(1+(W_3-conv4_kernel_size[0]+2*conv4_pad[0])/conv4_stride[0])
+    print(W_4, H_4)
 
     # Define sequential 3D convolutional neural network model
     self.model = nn.Sequential(
-        nn.Conv2d(in_channels=image_channels,
-                  out_channels=channel_1,
-                  kernel_size=conv_kernel_size,
-                  stride=conv_stride,
-                  padding=pad_1,
+        # conv1
+        nn.Conv2d(in_channels=conv1_in,
+                  out_channels=conv1_out,
+                  kernel_size=conv1_kernel_size,
+                  stride=conv1_stride,
+                  padding=conv1_pad,
                   dilation=1,
                   groups=1,
                   bias=True),
         nn.ReLU(),
-        nn.LayerNorm(H_1, eps=1e-05, elementwise_affine=True),
-        nn.MaxPool2d(kernel_size=pool_kernel_size,
-                      stride=pool_stride,
-                      padding=0,
-                      dilation=1,
-                      return_indices=False,
-                      ceil_mode=False),
-        nn.Conv2d(in_channels=channel_1,
-                  out_channels=channel_2,
-                  kernel_size=conv_kernel_size,
-                  stride=conv_stride,
-                  padding=pad_2,
+        nn.LayerNorm(H_1*W_1, eps=1e-05, elementwise_affine=True),
+
+        # conv2
+        nn.Conv2d(in_channels=conv2_in,
+                  out_channels=conv2_out,
+                  kernel_size=conv2_kernel_size,
+                  stride=conv2_stride,
+                  padding=conv2_pad,
                   dilation=1,
                   groups=1,
                   bias=True),
         nn.ReLU(),
-        nn.LayerNorm(H_2, eps=1e-05, elementwise_affine=True),
-        nn.MaxPool2d(kernel_size=pool_kernel_size,
-                      stride=pool_stride,
-                      padding=0,
-                      dilation=1,
-                      return_indices=False,
-                      ceil_mode=False),
-        Flatten(),
-        nn.Linear(channel_2*H_2max*H_2max, 32, bias=True),
-        nn.Linear(32, 64, bias=True),
-        nn.Linear(64, output_dim, bias=True)
+        nn.LayerNorm(H_2*W_2, eps=1e-05, elementwise_affine=True),
+
+        # conv3
+        nn.Conv2d(in_channels=conv3_in,
+                  out_channels=conv3_out,
+                  kernel_size=conv3_kernel_size,
+                  stride=conv3_stride,
+                  padding=conv3_pad,
+                  dilation=1,
+                  groups=1,
+                  bias=True),
+        nn.ReLU(),
+        nn.LayerNorm(H_3*W_3, eps=1e-05, elementwise_affine=True),
+
+        # conv4
+        nn.Conv2d(in_channels=conv4_in,
+                  out_channels=conv4_out,
+                  kernel_size=conv4_kernel_size,
+                  stride=conv4_stride,
+                  padding=conv4_pad,
+                  dilation=1,
+                  groups=1,
+                  bias=True),
+        nn.ReLU(),
+        nn.LayerNorm(H_4*W_4, eps=1e-05, elementwise_affine=True),
+        nn.Dropout(p=0.9),
+
+        # Fully connected layers
+        nn.Linear(conv4_out*H_4*W_4, 128, bias=True),
+        nn.Linear(128, 128, bias=True),
+        nn.Linear(128, output_dim, bias=True)
       )
 
   def forward(self,x):
     y_pred = self.model(x)
     return y_pred
+
+def main():
+  model = FeedForwardCNN()
+  print(model)
+
+if __name__ == "__main__":
+  main()
