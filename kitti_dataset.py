@@ -36,20 +36,19 @@ class KittiDataset(Dataset):
       0: 4540,
       1: 1100,
       2: 4660,
-      3: 800,
-      4: 270,
-      5: 2760,
+      3: 270,
+      4: 2760,
+      5: 1100,
       6: 1100,
-      7: 1100,
-      8: 4070,
-      9: 1590,
-      10: 1200
+      7: 4070,
+      8: 1590,
+      9: 1200
       }
 
     # Generate global frame ranges for each sequence
     self.seq_ranges = {}
     prev = 0
-    for i in range(11):
+    for i in range(len(self.seq_len)):
       start = prev + 1
       end = prev + 2 * self.seq_len[i]
       self.seq_ranges[i] = (start,end)  
@@ -170,9 +169,9 @@ def main():
   dataset = KittiDataset(seq_dir, poses_dir, oxts_dir, transform=transforms.Compose([ToTensor()]))
   #print(len(dataset))
 
-  sample = dataset[0]
-  print(sample)
-  #sample = dataset[46380 - 1]
+  sample = dataset[20601-1]
+  sample = dataset[21140-1]
+  #print(sample)
 
 if __name__ == "__main__":
   main()
