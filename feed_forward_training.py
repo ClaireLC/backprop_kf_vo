@@ -14,7 +14,7 @@ device = torch.device('cpu')
 
 # Dataset specifications
 seq_dir = "/mnt/disks/dataset/dataset_post/sequences/"
-poses_dir = "/mnt/disks/dataset/dataset/poses/"
+poses_dir = "/mnt/disks/dataset/dataset_post/poses/"
 oxts_dir = "/mnt/disks/dataset/dataset_post/oxts/"
 dataset = KittiDataset(seq_dir, poses_dir, oxts_dir, transform=transforms.Compose([ToTensor()]))
 
@@ -51,8 +51,8 @@ losses = []
 errors = []
 start_time = time.time()
 loss_file = 'claire_models/'+str(int(start_time))+'_loss.txt'
-loss_save = open(loss_file, "a")
-loss_save.write('epoch, iteration, loss, error\n')
+with open(loss_file, "a+") as loss_save:
+  loss_save.write('epoch, iteration, loss, error\n')
 for e in range(epochs):
     for i_batch, sample_batched in enumerate(dataloader):
         # # Extract training pairs from sequence of sequences (from Haruki)
@@ -76,13 +76,14 @@ for e in range(epochs):
         optimizer.step()
 
         # Print loss
-        if i_batch % 10 == 0:
+        if i_batch % 100 == 0:
             print('epoch {}/{}, iteration {}/{}, loss = {}'.format(e,(epochs-1),i_batch,int(len(dataset)/batch_size-1),loss.item()))
             losses.append(loss.item())
             current_error = torch.norm(y_prediction-y_actual)
             errors.append(current_error)
-            out_text = '{}, {}, {}, {}\n'.format(e, i_batch, loss.item(), current_error)
-            loss_save.write(out_text)
+            out_text = "{}, {}, {}, {}\n".format(e, i_batch, loss.item(), current_error)
+            with open(loss_file, "a+") as loss_save:
+              loss_save.write(out_text)
     # Save current model file after epoch
     model_name = 'claire_models/'+str(int(start_time))+'_'+str(e)+'_feed_forward'
     torch.save(model, model_name)
@@ -92,4 +93,3 @@ print('elapsed time: {}'.format(time.time() - start_time))
 model_name = 'claire_models/'+str(int(start_time))+'_feed_forward'
 torch.save(model, model_name)
 print('saved model: '+model_name)
-loss_save.close()
