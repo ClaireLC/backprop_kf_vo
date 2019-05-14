@@ -20,11 +20,7 @@ dataset = KittiDataset(seq_dir, poses_dir, oxts_dir, transform=transforms.Compos
 
 # Setup
 # seed(0)
-num_samples = 100
-seq_length = 100
-num_obstacles = 10
-image_size = 128
-image_dims = np.array((image_size, image_size))
+image_dims = np.array((150, 50))
 
 # Load dataset
 batch_size = 4
