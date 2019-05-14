@@ -1,5 +1,13 @@
 import numpy as np
+import time
+import torch
 import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import Dataset, DataLoader
+from torch.utils.tensorboard import SummaryWriter
+from torch.autograd import Variable
+from torchvision import transforms, utils
+from kitti_dataset import KittiDataset, ToTensor
 
 class Flatten(nn.Module):
 
@@ -132,10 +140,124 @@ class FeedForwardCNN(nn.Module):
   def forward(self,x):
     y_pred = self.model(x)
     return y_pred
+  
+  def train_model(self, starting_epoch = -1, model_id = None):
+    """
+      starting_epoch: the epoch to start training. If -1, this means we
+                      start training model from scratch.
+      model_id: timestamp of model whose checkpoint we want to load
+    """
+  
+    print("Training feed forward CNN")
+    # Device specification
+    device = torch.device('cpu')
+    #device = torch.device('cuda')
+    
+    # Tensorboard writer
+    writer = SummaryWriter()
+    
+    # Dataset specifications
+    seq_dir = "/mnt/disks/dataset/dataset_post/sequences/"
+    poses_dir = "/mnt/disks/dataset/dataset_post/poses/"
+    oxts_dir = "/mnt/disks/dataset/dataset_post/oxts/"
+    dataset = KittiDataset(seq_dir, poses_dir, oxts_dir, transform=transforms.Compose([ToTensor()]))
+    
+    # Load dataset
+    batch_size = 10
+    dataloader = DataLoader(
+                            dataset = dataset,
+                            batch_size = batch_size,
+                           )
+      
+    # Construct feed forward CNN model
+    image_dims = np.array((150, 50))
+    image_channels = 6
+    z_dim = 2
+    output_covariance = False
+    model = FeedForwardCNN(image_channels, image_dims, z_dim, output_covariance, batch_size)
+    print(model)
+    model = model.to(device=device)  # move model to speicified device
 
+    # Construct loss function and optimizer
+    loss_function = torch.nn.MSELoss(reduction='sum')
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.005, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
+  
+    # File saving info
+    if starting_epoch >= 0:
+      start_time = model_id
+    else:
+      start_time = time.time()
+
+    loss_file = 'claire_models/'+str(int(start_time))+'_loss.txt'
+    
+    # If we are starting from a saved checkpoint epoch, load that checkpoint
+    if starting_epoch >= 0:
+      checkpoint_path = "claire_models/" + str(int(start_time)) + "_" + str(starting_epoch)+ "_feed_forward"
+      checkpoint = torch.load(checkpoint_path)
+      model.load_state_dict(checkpoint['model_state_dict'])
+      optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+      epoch = checkpoint["epoch"]
+      loss = checkpoint["loss"]
+      print(epoch, loss)
+    model.train() # Set model to training model
+    
+    # Tensorboard model
+    #dummy_input = torch.rand(4,6,50,150)
+    #writer.add_graph(model,dummy_input)
+    
+    # Training
+    epochs = 10
+    losses = []
+    errors = []
+    with open(loss_file, "a+") as loss_save:
+      loss_save.write('epoch, iteration, loss, error\n')
+    for e in range(starting_epoch + 1, epochs):
+        for i_batch, sample_batched in enumerate(dataloader):
+            # Format data
+            x = torch.cat((sample_batched["curr_im"], sample_batched["diff_im"]), 1).to(device).type('torch.FloatTensor')
+            y_actual = sample_batched["vel"].to(device).type('torch.FloatTensor')
+            #print(y_actual)
+    
+            # Forward pass
+            y_prediction = model(x)
+    
+            # Compute loss
+            loss = loss_function(y_prediction, y_actual)
+    
+            # Backward pass()
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+    
+            # Print loss
+            if i_batch % 100 == 0:
+                print('epoch {}/{}, iteration {}/{}, loss = {}'.format(e,(epochs-1),i_batch,int(len(dataset)/batch_size-1),loss.item()))
+                losses.append(loss.item())
+                current_error = torch.norm(y_prediction-y_actual)
+                errors.append(current_error)
+                out_text = "{}, {}, {}, {}\n".format(e, i_batch, loss.item(), current_error)
+                with open(loss_file, "a+") as loss_save:
+                  loss_save.write(out_text)
+        # Save current model file after epoch
+        model_name = 'claire_models/'+str(int(start_time))+'_'+str(e)+'_feed_forward.tar'
+        torch.save({
+                    "epoch": e,
+                    "model_state_dict": model.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "loss": loss.item(),
+                    "batch_size": batch_size,
+                    }, model_name)
+    
+    # Finish up
+    print('elapsed time: {}'.format(time.time() - start_time))
+    model_name = 'claire_models/'+str(int(start_time))+'_feed_forward.tar'
+    torch.save(model, model_name)
+    print('saved model: '+model_name)
+  
 def main():
   model = FeedForwardCNN()
   print(model)
+  model.train_model(0, 1557788216)
 
 if __name__ == "__main__":
   main()
