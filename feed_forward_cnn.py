@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
-from torch.utils.tensorboard import SummaryWriter
+#from torch.utils.tensorboard import SummaryWriter
 from torch.autograd import Variable
 from torchvision import transforms, utils
 from kitti_dataset import KittiDataset, ToTensor
@@ -150,11 +150,11 @@ class FeedForwardCNN(nn.Module):
   
     print("Training feed forward CNN")
     # Device specification
-    device = torch.device('cpu')
-    #device = torch.device('cuda')
+    #device = torch.device('cpu')
+    device = torch.device('cuda')
     
     # Tensorboard writer
-    writer = SummaryWriter()
+    #writer = SummaryWriter()
     
     # Dataset specifications
     seq_dir = "/mnt/disks/dataset/dataset_post/sequences/"
@@ -214,8 +214,8 @@ class FeedForwardCNN(nn.Module):
     for e in range(starting_epoch + 1, epochs):
         for i_batch, sample_batched in enumerate(dataloader):
             # Format data
-            x = torch.cat((sample_batched["curr_im"], sample_batched["diff_im"]), 1).to(device).type('torch.FloatTensor')
-            y_actual = sample_batched["vel"].to(device).type('torch.FloatTensor')
+            x = torch.cat((sample_batched["curr_im"], sample_batched["diff_im"]), 1).type('torch.FloatTensor').to(device)
+            y_actual = sample_batched["vel"].type('torch.FloatTensor').to(device)
             #print(y_actual)
     
             # Forward pass
@@ -257,7 +257,7 @@ class FeedForwardCNN(nn.Module):
 def main():
   model = FeedForwardCNN()
   print(model)
-  model.train_model(0, 1557788216)
+  model.train_model(-1, 1557788216)
 
 if __name__ == "__main__":
   main()
