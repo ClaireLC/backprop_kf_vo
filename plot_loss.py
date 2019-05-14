@@ -1,10 +1,13 @@
 import numpy as np
 import csv
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
+
 # Read loss file
-start_time = '1556744830'
-file_path = 'eric_models/'+start_time+'_loss.txt'
+start_time = '1557525033'
+file_path = 'claire_models/'+start_time+'_loss.txt'
 
 # Extract data
 reader = csv.reader(open(file_path, newline=''), delimiter=',', quotechar='|')
@@ -36,7 +39,7 @@ dataE = np.array(dataE)
 # Plot loss
 fig, axs = plt.subplots()
 # axs.plot(data[:,0], data[:,3])
-axs.plot(range(dataE.shape[0]), dataE)
+axs.plot(range(dataE.shape[0]), dataE,'.')
 # axs[0].set_xlim(0, time_ind)
 axs.set_xlabel('epoch')
 axs.set_ylabel('MSE training loss')
@@ -48,6 +51,6 @@ print('training mean RMS error: {}'.format(np.mean(np.sqrt(data[:,2]))))
 print('training std  RMS error: {}'.format(np.std(np.sqrt(data[:,2]))))
 
 # Display and save image
-fig_name = 'eric_models/'+start_time+'_loss.png'
+fig_name = 'claire_models/'+start_time+'_loss.png'
 plt.savefig(fig_name, format="png")
-plt.show()
+#plt.show()
