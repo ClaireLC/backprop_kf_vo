@@ -4,20 +4,23 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
-#from torch.utils.tensorboard import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 from torch.autograd import Variable
 from torchvision import transforms, utils
-from kitti_dataset import KittiDataset, ToTensor
+from kitti_dataset import KittiDataset, ToTensor, SubsetSampler
 
 class Flatten(nn.Module):
 
   def forward(self, x):
-    N = x.shape[0]
-    return x.view(N,-1)
+    size = x.size()[1:] # All dims except batch dimension
+    num_features = 1
+    for s in size:
+      num_features *= s
+    return x.view(-1, num_features)
 
 class FeedForwardCNN(nn.Module):
 
-  def __init__(self, image_channels=6, image_dims=np.array([150, 50]), z_dim=2, output_covariance=False, batch_size = 1):
+  def __init__(self, image_channels=6, image_dims=np.array([50, 150]), z_dim=2, output_covariance=False, batch_size = 1):
     super(FeedForwardCNN, self).__init__()
 
     # Set output vector size based on dimension of z and if covariance is required
@@ -41,15 +44,18 @@ class FeedForwardCNN(nn.Module):
     # conv2
     conv2_in = conv1_out
     conv2_kernel_size = (5,5)
-    conv2_stride = (2,1)
+    #conv2_stride = (2,1)
+    conv2_stride = (1,2)
+    #conv2_pad = (2,3)
     conv2_pad = (3,2)
     conv2_out = 16
 
     # conv3
     conv3_in = conv2_out
     conv3_kernel_size = (5,5)
-    conv3_stride = (2,1)
-    conv3_pad = (6,2)
+    conv3_stride = (1,2)
+    conv3_pad = (2,6)
+    #conv3_pad = (6,2)
     conv3_out = 16
 
     # conv3
@@ -59,21 +65,21 @@ class FeedForwardCNN(nn.Module):
     conv4_pad = (3,3)
     conv4_out = 16
 
-    H_1 = int(1+(image_dims[1]-conv1_kernel_size[1]+2*conv1_pad[1])/conv1_stride[1])
-    W_1 = int(1+(image_dims[0]-conv1_kernel_size[0]+2*conv1_pad[0])/conv1_stride[0])
-    print(W_1, H_1)
+    W_1 = int(1+(image_dims[1]-(conv1_kernel_size[1]-1)+2*conv1_pad[1]-1)/conv1_stride[1])
+    H_1 = int(1+(image_dims[0]-(conv1_kernel_size[0]-1)+2*conv1_pad[0]-1)/conv1_stride[0])
+    print(H_1, W_1)
 
-    H_2 = int(1+(H_1-conv2_kernel_size[1]+2*conv2_pad[1])/conv2_stride[1])
-    W_2 = int(1+(W_1-conv2_kernel_size[0]+2*conv2_pad[0])/conv2_stride[0])
-    print(W_2, H_2)
+    W_2 = int(1+(W_1-(conv2_kernel_size[1]-1)+2*conv2_pad[1]-1)/conv2_stride[1])
+    H_2 = int(1+(H_1-(conv2_kernel_size[0]-1)+2*conv2_pad[0]-1)/conv2_stride[0])
+    print(H_2, W_2)
 
-    H_3 = int(1+(H_2-conv3_kernel_size[1]+2*conv3_pad[1])/conv3_stride[1])
-    W_3 = int(1+(W_2-conv3_kernel_size[0]+2*conv3_pad[0])/conv3_stride[0])
-    print(W_3, H_3)
+    W_3 = int(1+(W_2-(conv3_kernel_size[1]-1)+2*conv3_pad[1]-1)/conv3_stride[1])
+    H_3 = int(1+(H_2-(conv3_kernel_size[0]-1)+2*conv3_pad[0]-1)/conv3_stride[0])
+    print(H_3, W_3)
 
-    H_4 = int(1+(H_3-conv4_kernel_size[1]+2*conv4_pad[1])/conv4_stride[1])
-    W_4 = int(1+(W_3-conv4_kernel_size[0]+2*conv4_pad[0])/conv4_stride[0])
-    print(W_4, H_4)
+    W_4 = int(1+(W_3-(conv4_kernel_size[1]-1)+2*conv4_pad[1]-1)/conv4_stride[1])
+    H_4 = int(1+(H_3-(conv4_kernel_size[0]-1)+2*conv4_pad[0]-1)/conv4_stride[0])
+    print(H_4, W_4)
 
     # Define sequential 3D convolutional neural network model
     self.model = nn.Sequential(
@@ -87,8 +93,8 @@ class FeedForwardCNN(nn.Module):
                   groups=1,
                   bias=True),
         nn.ReLU(),
-        nn.LayerNorm([batch_size, 16, 50, 150], eps=1e-05, elementwise_affine=True),
-        #nn.LayerNorm(H_1*W_1, eps=1e-05, elementwise_affine=True),
+        nn.BatchNorm2d(16, eps=1e-05, affine=True),
+        #nn.LayerNorm([batch_size, 16, H_1, W_1], eps=1e-05, elementwise_affine=True),
 
         # conv2
         nn.Conv2d(in_channels=conv2_in,
@@ -100,8 +106,8 @@ class FeedForwardCNN(nn.Module):
                   groups=1,
                   bias=True),
         nn.ReLU(),
-        nn.LayerNorm([batch_size, 16, 26, 150], eps=1e-05, elementwise_affine=True),
-        #nn.LayerNorm(H_2*W_2, eps=1e-05, elementwise_affine=True),
+        nn.BatchNorm2d(16, eps=1e-05, affine=True),
+        #nn.LayerNorm([batch_size, 16, H_2, W_2], eps=1e-05, elementwise_affine=True),
 
         # conv3
         nn.Conv2d(in_channels=conv3_in,
@@ -113,8 +119,8 @@ class FeedForwardCNN(nn.Module):
                   groups=1,
                   bias=True),
         nn.ReLU(),
-        #nn.LayerNorm(H_3*W_3, eps=1e-05, elementwise_affine=True),
-        nn.LayerNorm([batch_size, 16, 17, 150], eps=1e-05, elementwise_affine=True),
+        nn.BatchNorm2d(16, eps=1e-05, affine=True),
+        #nn.LayerNorm([batch_size, 16, H_3, W_3], eps=1e-05, elementwise_affine=True),
 
         # conv4
         nn.Conv2d(in_channels=conv4_in,
@@ -126,14 +132,15 @@ class FeedForwardCNN(nn.Module):
                   groups=1,
                   bias=True),
         nn.ReLU(),
-        nn.LayerNorm([batch_size, 16, 10, 76], eps=1e-05, elementwise_affine=True),
-        #nn.LayerNorm(H_4*W_4, eps=1e-05, elementwise_affine=True),
+        nn.BatchNorm2d(16, eps=1e-05, affine=True),
+        #nn.LayerNorm([batch_size, 16, H_4, W_4], eps=1e-05, elementwise_affine=True),
         nn.Dropout(p=0.9),
         Flatten(),
         # Fully connected layers
-        nn.Linear(12160, 128, bias=True),
-        #nn.Linear(conv4_out*H_4*W_4, 128, bias=True),
+        nn.Linear(H_4 * W_4 * 16, 128, bias=True),
+        nn.ReLU(),
         nn.Linear(128, 128, bias=True),
+        nn.ReLU(),
         nn.Linear(128, output_dim, bias=True)
       )
 
@@ -154,7 +161,7 @@ class FeedForwardCNN(nn.Module):
     device = torch.device('cuda')
     
     # Tensorboard writer
-    #writer = SummaryWriter()
+    writer = SummaryWriter()
     
     # Dataset specifications
     seq_dir = "/mnt/disks/dataset/dataset_post/sequences/"
@@ -163,14 +170,21 @@ class FeedForwardCNN(nn.Module):
     dataset = KittiDataset(seq_dir, poses_dir, oxts_dir, transform=transforms.Compose([ToTensor()]))
     
     # Load dataset
-    batch_size = 10
+    sampler = SubsetSampler(20)
+    batch_size = 4
     dataloader = DataLoader(
                             dataset = dataset,
                             batch_size = batch_size,
                            )
+    dataloader_sampler = DataLoader(
+                            dataset = dataset,
+                            batch_size = batch_size,
+                            sampler = sampler,
+                            shuffle = False,
+                            )
       
     # Construct feed forward CNN model
-    image_dims = np.array((150, 50))
+    image_dims = np.array((50, 150))
     image_channels = 6
     z_dim = 2
     output_covariance = False
@@ -180,7 +194,7 @@ class FeedForwardCNN(nn.Module):
 
     # Construct loss function and optimizer
     loss_function = torch.nn.MSELoss(reduction='sum')
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.005, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
   
     # File saving info
     if starting_epoch >= 0:
@@ -192,7 +206,7 @@ class FeedForwardCNN(nn.Module):
     
     # If we are starting from a saved checkpoint epoch, load that checkpoint
     if starting_epoch >= 0:
-      checkpoint_path = "claire_models/" + str(int(start_time)) + "_" + str(starting_epoch)+ "_feed_forward"
+      checkpoint_path = "claire_models/" + str(int(start_time)) + "_" + str(starting_epoch)+ "_feed_forward.tar"
       checkpoint = torch.load(checkpoint_path)
       model.load_state_dict(checkpoint['model_state_dict'])
       optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
@@ -204,9 +218,9 @@ class FeedForwardCNN(nn.Module):
     # Tensorboard model
     #dummy_input = torch.rand(4,6,50,150)
     #writer.add_graph(model,dummy_input)
-    
+    #quit() 
     # Training
-    epochs = 10
+    epochs = 1000
     losses = []
     errors = []
     with open(loss_file, "a+") as loss_save:
@@ -216,7 +230,6 @@ class FeedForwardCNN(nn.Module):
             # Format data
             x = torch.cat((sample_batched["curr_im"], sample_batched["diff_im"]), 1).type('torch.FloatTensor').to(device)
             y_actual = sample_batched["vel"].type('torch.FloatTensor').to(device)
-            #print(y_actual)
     
             # Forward pass
             y_prediction = model(x)
@@ -251,13 +264,13 @@ class FeedForwardCNN(nn.Module):
     # Finish up
     print('elapsed time: {}'.format(time.time() - start_time))
     model_name = 'claire_models/'+str(int(start_time))+'_feed_forward.tar'
-    torch.save(model, model_name)
+    #torch.save(model, model_name)
     print('saved model: '+model_name)
   
 def main():
   model = FeedForwardCNN()
   print(model)
-  model.train_model(-1, 1557788216)
+  model.train_model(-1, 1557863675)
 
 if __name__ == "__main__":
   main()
