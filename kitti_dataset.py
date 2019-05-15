@@ -1,7 +1,7 @@
 import os
 import torch
 import numpy as np
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, Sampler
 from torchvision import transforms, utils
 from skimage import io
 import matplotlib.pyplot as plt
@@ -113,8 +113,8 @@ class KittiDataset(Dataset):
     oxts_file_path = self.oxts_dir + seq_num_str + "/data/" + oxts_file_str + ".txt"
     #print(oxts_file_path)
     
-    for_vel_line_num = 7
-    ang_vel_line_num = 18
+    for_vel_line_num = 8
+    ang_vel_line_num = 19
 
     for_vel = None
     ang_vel = None
@@ -161,6 +161,16 @@ class ToTensor(object):
             "pose":    torch.from_numpy(pose),
             "vel":     torch.from_numpy(vel),
             }
+
+class SubsetSampler(Sampler):
+  def __init__(self, mask):
+    self.mask = mask
+  
+  def __iter__(self):
+    return iter(range(self.mask))
+
+  def __len__(self):
+    return len(self.mask)
     
 def main():
   seq_dir = "/mnt/disks/dataset/dataset_post/sequences/"
