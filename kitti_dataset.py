@@ -130,9 +130,10 @@ class KittiDataset(Dataset):
 
     # Get timestamp
     times_path = self.seq_dir + seq_num_str + "/times.txt"
+    print(times_path)
     with open(times_path, "r") as fid:
       for i, line in enumerate(fid):
-        if i == frame_num - 1:
+        if i == frame_num:
           curr_time = float(line)
           break
   
@@ -142,12 +143,13 @@ class KittiDataset(Dataset):
             "diff_im": diff_im,
             "pose": np.asarray(pose),
             "vel": np.asarray([for_vel,ang_vel]),
-            "curr_time": curr_time,
+            "curr_time": np.asarray(curr_time),
             }
 
     if self.transform:
       sample = self.transform(sample)
 
+    print(curr_time)
     return sample
 
 class ToTensor(object):
@@ -158,6 +160,7 @@ class ToTensor(object):
     diff_im = sample["diff_im"]
     pose    = sample["pose"]
     vel = sample["vel"]
+    curr_time = sample["curr_time"]
 
     # Swap image axes because
     # numpy image: H x W x C
@@ -170,6 +173,7 @@ class ToTensor(object):
             "diff_im": torch.from_numpy(diff_im),
             "pose":    torch.from_numpy(pose),
             "vel":     torch.from_numpy(vel),
+            "curr_time": torch.from_numpy(curr_time),
             }
 
 class SubsetSampler(Sampler):
@@ -191,7 +195,8 @@ def main():
 
   sample = dataset[20601-1]
   sample = dataset[21140-1]
-  #print(sample)
+  sample = dataset[0]
+  print(sample["curr_time"])
 
 if __name__ == "__main__":
   main()
