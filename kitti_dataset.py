@@ -128,13 +128,23 @@ class KittiDataset(Dataset):
     #print(oxts_data)
     #print(for_vel, ang_vel)
 
+    # Get timestamp
+    times_path = self.seq_dir + seq_num_str + "/times.txt"
+    with open(times_path, "r") as fid:
+      for i, line in enumerate(fid):
+        if i == frame_num - 1:
+          curr_time = float(line)
+          break
+  
     # Format sample
     sample= {
             "curr_im": curr_im,
             "diff_im": diff_im,
             "pose": np.asarray(pose),
             "vel": np.asarray([for_vel,ang_vel]),
+            "curr_time": curr_time,
             }
+
     if self.transform:
       sample = self.transform(sample)
 
