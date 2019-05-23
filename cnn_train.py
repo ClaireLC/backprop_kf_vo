@@ -95,13 +95,13 @@ def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, mod
               loss_save.write(out_text)
 
     # End of epoch
-    val_loss = validation_loss(model, val_dataloader)
+    val_loss = validation_loss(model, val_dataloader, loss_function)
     print()
     print('epoch {}, validation loss = {}'.format(epoch, val_loss))
     print()
     with open(val_loss_file, "a+") as val_loss_save:
       val_loss_save.write("{}, {}\n".format(epoch, val_loss))
-      
+
     # Save the best model after each epoch based on the lowest achieved validation loss
     if lowest_loss is None or lowest_loss > val_loss:
       lowest_loss = val_loss
@@ -127,7 +127,7 @@ def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, mod
   print('saved model: '+ model_name)
 
 
-def validation_loss(model, val_dataloader):
+def validation_loss(model, val_dataloader, loss_function):
   with torch.no_grad():
     model.eval()
     total_loss = 0.0
@@ -187,7 +187,7 @@ def main():
   learning_rates = [1e-3, 1e-4]
   for learning_rate in learning_rates:
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
-    train_model(model, optimizer, loss_function, lr=learning_rate, starting_epoch=-1, train_dataloader=dataloader_sampler)
+    train_model(model, optimizer, loss_function, lr=learning_rate, starting_epoch=-1, train_dataloader=train_dataloader, val_dataloader=val_dataloader)
 
 
 if __name__ == "__main__":
