@@ -19,7 +19,10 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Create dataset
 dataset = KittiDataset(SEQ_DIR, POSES_DIR, OXTS_DIR, transform=transforms.Compose([ToTensor()]))
+
+# Global parameters
 batch_size = 4
+epochs = 100
 
 def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, model_id=None,
   train_dataloader=None, val_dataloader=None, dataloader_sampler=None):
@@ -55,7 +58,6 @@ def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, mod
 
 
   # Training
-  epochs = 1000
   losses = []
   errors = []
   with open(loss_file, "a+") as loss_save:
@@ -146,7 +148,7 @@ def main():
   loss_function = torch.nn.MSELoss(reduction='sum')
   optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
 
-  train_model(model, optimizer, loss_function, lr=1e-3, starting_epoch=-1, train_dataloader=train_dataloader, dataloader_sampler=dataloader_sampler)
+  train_model(model, optimizer, loss_function, lr=1e-3, starting_epoch=-1, train_dataloader=dataloader_sampler, dataloader_sampler=dataloader_sampler)
 
 if __name__ == "__main__":
   main()
