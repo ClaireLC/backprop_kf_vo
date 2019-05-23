@@ -22,7 +22,7 @@ batch_size = 4
 epochs = 100
 
 def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, model_id=None,
-  train_dataloader=None, val_dataloader=None, dataloader_sampler=None):
+  train_dataloader=None, val_dataloader=None):
   """
     starting_epoch: the epoch to start training. If -1, this means we
                     start training model from scratch.
@@ -151,9 +151,11 @@ def main():
 
   # Construct loss function and optimizer
   loss_function = torch.nn.MSELoss(reduction='sum')
-  optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
 
-  train_model(model, optimizer, loss_function, lr=1e-3, starting_epoch=-1, train_dataloader=dataloader_sampler, dataloader_sampler=dataloader_sampler)
+  learning_rates = [1e-3, 1e-4]
+  for learning_rate in learning_rates:
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
+    train_model(model, optimizer, loss_function, lr=1e-3, starting_epoch=-1, train_dataloader=dataloader_sampler)
 
 if __name__ == "__main__":
   main()
