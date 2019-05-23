@@ -172,7 +172,7 @@ class SubsetSampler(Sampler):
     return iter(range(self.mask))
 
   def __len__(self):
-    return len(self.mask)
+    return self.mask
 
 def main():
   seq_dir = "/mnt/disks/dataset/dataset_post/sequences/"

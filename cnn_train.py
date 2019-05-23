@@ -117,31 +117,31 @@ def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, mod
 
 def create_dataloaders(dataset, batch_size, sampler=None):
   # Load dataset
-  if sampler is not None:
+  if sampler is None:
     dataloader = DataLoader(
-                    dataset = dataset,
-                    batch_size = batch_size,
-                    )
+                            dataset = dataset,
+                            batch_size = batch_size,
+                            )
   else:
     dataloader = DataLoader(
-                    dataset = dataset,
-                    batch_size = batch_size,
-                    sampler = sampler,
-                    shuffle = False,
-                    )
+                            dataset = dataset,
+                            batch_size = batch_size,
+                            sampler = sampler,
+                            shuffle = False,
+                            )
   return dataloader
 
 
 def main():
   print("Creating dataloaders...")
   # Create dataset
-  train_dataset = KittiDataset(SEQ_DIR, POSES_DIR, OXTS_DIR, transform=transforms.Compose([ToTensor()]), train=True, val_idx=9)
+  train_dataset = KittiDataset(SEQ_DIR, POSES_DIR, OXTS_DIR, transform=transforms.Compose([ToTensor()]))
   val_dataset = KittiDataset(SEQ_DIR, POSES_DIR, OXTS_DIR, transform=transforms.Compose([ToTensor()]), train=False, val_idx=9)
   sampler = SubsetSampler(20)
 
   train_dataloader = create_dataloaders(train_dataset, batch_size)
-  dataloader_sampler = create_dataloaders(train_dataset, batch_size, sampler)
   val_dataloader = create_dataloaders(val_dataset, batch_size)
+  dataloader_sampler = create_dataloaders(train_dataset, batch_size, sampler)
   print("Done.")
 
   # Construct feed forward CNN model
