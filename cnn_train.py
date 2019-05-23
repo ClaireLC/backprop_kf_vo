@@ -39,6 +39,7 @@ def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, mod
 
   # Logs all files
   loss_file = 'log/' + str(int(start_time)) + '_lr_' + str(lr) + '_loss.txt'
+  val_loss_file = 'log/' + str(int(start_time)) + '_lr_' + str(lr) + '_val_loss.txt'
 
   # If we are starting from a saved checkpoint epoch, load that checkpoint
   if starting_epoch >= 0:
@@ -50,60 +51,70 @@ def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, mod
     loss = checkpoint["loss"]
     print(epoch, loss)
 
-  # Set model to training model
-  model.train()
-
 
   # Training
   losses = []
   errors = []
   with open(loss_file, "a+") as loss_save:
     loss_save.write('epoch, iteration, loss, error\n')
+  with open(val_loss_file, "a+") as loss_save:
+    loss_save.write('epoch, val_loss\n')
 
   lowest_loss = None
 
   for epoch in range(starting_epoch + 1, epochs):
-      for i_batch, sample_batched in enumerate(train_dataloader):
-          # Format data
-          x = torch.cat((sample_batched["curr_im"], sample_batched["diff_im"]), 1).type('torch.FloatTensor').to(device)
-          y_actual = sample_batched["vel"].type('torch.FloatTensor').to(device)
+    # Set model to training model
+    model.train()
 
-          # Forward pass
-          y_prediction = model(x)
+    for i_batch, sample_batched in enumerate(train_dataloader):
+        # Format data
+        x = torch.cat((sample_batched["curr_im"], sample_batched["diff_im"]), 1).type('torch.FloatTensor').to(device)
+        y_actual = sample_batched["vel"].type('torch.FloatTensor').to(device)
 
-          # Compute loss
-          loss = loss_function(y_prediction, y_actual)
+        # Forward pass
+        y_prediction = model(x)
 
-          # Backward pass()
-          optimizer.zero_grad()
-          loss.backward()
-          optimizer.step()
+        # Compute loss
+        loss = loss_function(y_prediction, y_actual)
 
-          # Print loss
-          if i_batch % 100 == 0:
-              print('epoch {}/{}, iteration {}/{}, loss = {}'.format(epoch, (epochs-1), i_batch, int(len(train_dataloader) / batch_size - 1), loss.item()))
-              losses.append(loss.item())
-              current_error = torch.norm(y_prediction-y_actual)
-              errors.append(current_error)
+        # Backward pass()
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
 
-              # Log info in loss_file
-              out_text = "{}, {}, {}, {}\n".format(epoch, i_batch, loss.item(), current_error)
-              with open(loss_file, "a+") as loss_save:
-                loss_save.write(out_text)
+        # Print loss
+        if i_batch % 100 == 0:
+            print('epoch {}/{}, iteration {}/{}, loss = {}'.format(epoch, (epochs-1), i_batch, int(len(train_dataloader) / batch_size - 1), loss.item()))
+            losses.append(loss.item())
+            current_error = torch.norm(y_prediction-y_actual)
+            errors.append(current_error)
 
-      # Save the best model after each epoch based on the lowest achieved loss
-      if lowest_loss is None or lowest_loss > loss:
-        lowest_loss = loss
-        model_name = 'log/' + str(int(start_time)) + '_bestloss_feed_forward.tar'
-        torch.save({
-                    "epoch": epoch,
-                    "model_state_dict": model.state_dict(),
-                    "optimizer_state_dict": optimizer.state_dict(),
-                    "loss": loss.item(),
-                    "batch_size": batch_size,
-                    }, model_name)
+            # Log info in loss_file
+            out_text = "{}, {}, {}, {}\n".format(epoch, i_batch, loss.item(), current_error)
+            with open(loss_file, "a+") as loss_save:
+              loss_save.write(out_text)
 
-  # Finish up
+    # End of epoch
+    val_loss = validation_loss(model, val_dataloader)
+    print()
+    print('epoch {}, validation loss = {}'.format(epoch, val_loss))
+    print()
+    with open(val_loss_file, "a+") as val_loss_save:
+      val_loss_save.write("{}, {}\n".format(epoch, val_loss))
+      
+    # Save the best model after each epoch based on the lowest achieved validation loss
+    if lowest_loss is None or lowest_loss > val_loss:
+      lowest_loss = val_loss
+      model_name = 'log/' + str(int(start_time)) + '_bestloss_feed_forward.tar'
+      torch.save({
+                  "epoch": epoch,
+                  "model_state_dict": model.state_dict(),
+                  "optimizer_state_dict": optimizer.state_dict(),
+                  "loss": loss.item(),
+                  "batch_size": batch_size,
+                  }, model_name)
+
+  # Finish up. End of training
   print('elapsed time: {}'.format(time.time() - start_time))
   model_name = 'log/' + str(int(start_time)) + '_end_feed_forward.tar'
   torch.save({
@@ -114,6 +125,27 @@ def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, mod
               "batch_size": batch_size,
               }, model_name)
   print('saved model: '+ model_name)
+
+
+def validation_loss(model, val_dataloader):
+  with torch.no_grad():
+    model.eval()
+    total_loss = 0.0
+    num_batches = 0
+    for i_batch, sample_batched in enumerate(val_dataloader):
+        num_batches += 1
+        # Format data
+        x = torch.cat((sample_batched["curr_im"], sample_batched["diff_im"]), 1).type('torch.FloatTensor').to(device)
+        y_actual = sample_batched["vel"].type('torch.FloatTensor').to(device)
+
+        # Forward pass
+        y_prediction = model(x)
+        # Compute loss
+        loss = loss_function(y_prediction, y_actual).item()
+        total_loss += loss
+
+  # Return the average validation loss across all batches
+  return total_loss / num_batches
 
 def create_dataloaders(dataset, batch_size, sampler=None):
   # Load dataset
@@ -155,7 +187,7 @@ def main():
   learning_rates = [1e-3, 1e-4]
   for learning_rate in learning_rates:
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
-    train_model(model, optimizer, loss_function, lr=1e-3, starting_epoch=-1, train_dataloader=dataloader_sampler)
+    train_model(model, optimizer, loss_function, lr=1e-3, starting_epoch=-1, train_dataloader=dataloader_sampler, val_dataloader=dataloader_sampler)
 
 if __name__ == "__main__":
   main()
