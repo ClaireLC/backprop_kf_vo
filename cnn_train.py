@@ -17,9 +17,6 @@ OXTS_DIR = "/mnt/disks/dataset/dataset_post/oxts/"
 # Device specification
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-# Create dataset
-dataset = KittiDataset(SEQ_DIR, POSES_DIR, OXTS_DIR, transform=transforms.Compose([ToTensor()]))
-
 # Global parameters
 batch_size = 4
 epochs = 100
@@ -84,7 +81,7 @@ def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, mod
 
           # Print loss
           if i_batch % 100 == 0:
-              print('epoch {}/{}, iteration {}/{}, loss = {}'.format(epoch, (epochs-1), i_batch, int(len(dataset) / batch_size - 1), loss.item()))
+              print('epoch {}/{}, iteration {}/{}, loss = {}'.format(epoch, (epochs-1), i_batch, int(len(train_dataloader) / batch_size - 1), loss.item()))
               losses.append(loss.item())
               current_error = torch.norm(y_prediction-y_actual)
               errors.append(current_error)
@@ -118,25 +115,33 @@ def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, mod
               }, model_name)
   print('saved model: '+ model_name)
 
-def create_dataloaders(batch_size):
+def create_dataloaders(dataset, batch_size, sampler=None):
   # Load dataset
-  sampler = SubsetSampler(20)
-  train_dataloader = DataLoader(
-                          dataset = dataset,
-                          batch_size = batch_size,
-                         )
-  dataloader_sampler = DataLoader(
-                          dataset = dataset,
-                          batch_size = batch_size,
-                          sampler = sampler,
-                          shuffle = False,
-                          )
-  return train_dataloader, dataloader_sampler
+  if sampler is not None:
+    dataloader = DataLoader(
+                    dataset = dataset,
+                    batch_size = batch_size,
+                    )
+  else:
+    dataloader = DataLoader(
+                    dataset = dataset,
+                    batch_size = batch_size,
+                    sampler = sampler,
+                    shuffle = False,
+                    )
+  return dataloader
 
 
 def main():
   print("Creating dataloaders...")
-  train_dataloader, dataloader_sampler = create_dataloaders(batch_size)
+  # Create dataset
+  train_dataset = KittiDataset(SEQ_DIR, POSES_DIR, OXTS_DIR, transform=transforms.Compose([ToTensor()]), train=True, val_idx=9)
+  val_dataset = KittiDataset(SEQ_DIR, POSES_DIR, OXTS_DIR, transform=transforms.Compose([ToTensor()]), train=False, val_idx=9)
+  sampler = SubsetSampler(20)
+
+  train_dataloader = create_dataloaders(train_dataset, batch_size)
+  dataloader_sampler = create_dataloaders(train_dataset, batch_size, sampler)
+  val_dataloader = create_dataloaders(val_dataset, batch_size)
   print("Done.")
 
   # Construct feed forward CNN model

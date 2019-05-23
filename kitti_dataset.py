@@ -25,6 +25,9 @@ class KittiDataset(Dataset):
       poses_dir: path to root directory of ground truth poses
       oxts_dir: path to root directory of ground truth GPS/IMU data, which contain velocities
       trnasform: optional transform to be applied on a sample
+      train: when True, creates training set, skipping val_idx sequence.
+        When false, creates validation set, containing only val_idx sequences
+      val_idx: The index that specifies which sequence should be the validation set. range 0-9
     """
 
     self.seq_dir = seq_dir
@@ -47,56 +50,26 @@ class KittiDataset(Dataset):
 
     # Generate train or validation set
     self.dataset = []
-    prev = 0
     for key, val in self.seq_len.items():
+      # Skip the validation set when creating training set
+      # Skip everything else when creating validation set
+      if (train and key == val_idx) or (not train and key != val_idx):
+          continue
       # All frames are 1 indexed
       val += 1
       for frame_num in range(1, val):
         self.dataset.append((key, frame_num, "image_2"))
       for frame_num in range(1, val):
         self.dataset.append((key, frame_num, "image_3"))
-    print(len(self.dataset), self.__len__())
-    assert(len(self.dataset) == self.__len__())
-      
-    
-    # Generate global frame ranges for each sequence
-    self.seq_ranges = {}
-    prev = 0
-    for i in range(len(self.seq_len)):
-      start = prev + 1
-      end = prev + 2 * self.seq_len[i]
-      self.seq_ranges[i] = (start,end)
-      prev = end
-    #print(self.seq_ranges)
-    
+    #print(len(self.dataset))
 
   def __len__(self):
-    total_len = 0
-    for key, val in self.seq_len.items():
-      total_len += val
-    # Now, double total length because we consider images from each camera as separate data points
-    total_len *= 2
-    return total_len
+    return len(self.dataset)
+
 
   def __getitem__(self, idx):
-    # Decompose index into sequence number and frame number
-    idx += 1
-    seq_num = None
-    cam_num = None
-    frame_num = None
-    for key, val in self.seq_ranges.items():
-      if ((idx >= val[0]) and (idx <= val[1])):
-        seq_num = key
-
-    # Use sequence number to determine camera and frame number
-    if ((idx >= self.seq_ranges[seq_num][0]) and (idx <= self.seq_ranges[seq_num][0] + self.seq_len[seq_num] - 1)):
-      frame_num = idx - self.seq_ranges[seq_num][0] + 1
-      cam_num = "image_2"
-    else:
-      frame_num = idx - self.seq_ranges[seq_num][0] - self.seq_len[seq_num] + 1
-      cam_num = "image_3"
-
-    #print(seq_num, frame_num, cam_num)
+    # Directly index into dataset list to get data sample information
+    seq_num, frame_num, cam_num = self.dataset[idx]
 
     # Get current and difference images
     frame_digits = 6
@@ -205,12 +178,13 @@ def main():
   seq_dir = "/mnt/disks/dataset/dataset_post/sequences/"
   poses_dir = "/mnt/disks/dataset/dataset/poses/"
   oxts_dir = "/mnt/disks/dataset/dataset_post/oxts/"
-  dataset = KittiDataset(seq_dir, poses_dir, oxts_dir, transform=transforms.Compose([ToTensor()]))
-  #print(len(dataset))
+  dataset_1 = KittiDataset(seq_dir, poses_dir, oxts_dir, transform=transforms.Compose([ToTensor()]))
+  dataset_2 = KittiDataset(seq_dir, poses_dir, oxts_dir, transform=transforms.Compose([ToTensor()]), train=False)
+  print(len(dataset_1), len(dataset_2))
 
-  sample = dataset[20601-1]
-  sample = dataset[21140-1]
-  sample = dataset[0]
+  sample = dataset_1[20601-1]
+  sample = dataset_1[21140-1]
+  sample = dataset_1[0]
   #print(sample["curr_time"])
 
 if __name__ == "__main__":
