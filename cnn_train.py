@@ -17,7 +17,11 @@ OXTS_DIR = "/mnt/disks/dataset/dataset_post/oxts/"
 # Device specification
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, model_id=None, 
+# Create dataset
+dataset = KittiDataset(SEQ_DIR, POSES_DIR, OXTS_DIR, transform=transforms.Compose([ToTensor()]))
+batch_size = 4
+
+def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, model_id=None,
   train_dataloader=None, val_dataloader=None, dataloader_sampler=None):
   """
     starting_epoch: the epoch to start training. If -1, this means we
@@ -25,8 +29,8 @@ def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, mod
     model_id: timestamp of model whose checkpoint we want to load
   """
 
-  print("Training feed forward CNN")
-    
+  print("Training feed forward CNN with lr =", str(lr))
+
   # Create loss_file name using starting time to log training process
   if starting_epoch >= 0:
     start_time = model_id
@@ -35,7 +39,7 @@ def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, mod
 
   # Logs all files
   loss_file = 'log/' + str(int(start_time)) + '_lr_' + str(lr) + '_loss.txt'
-  
+
   # If we are starting from a saved checkpoint epoch, load that checkpoint
   if starting_epoch >= 0:
     checkpoint_path = "log/" + str(int(start_time)) + "_" + str(starting_epoch) + "_feed_forward.tar"
@@ -47,8 +51,8 @@ def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, mod
     print(epoch, loss)
 
   # Set model to training model
-  model.train() 
-  
+  model.train()
+
 
   # Training
   epochs = 1000
@@ -64,18 +68,18 @@ def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, mod
           # Format data
           x = torch.cat((sample_batched["curr_im"], sample_batched["diff_im"]), 1).type('torch.FloatTensor').to(device)
           y_actual = sample_batched["vel"].type('torch.FloatTensor').to(device)
-  
+
           # Forward pass
           y_prediction = model(x)
-  
+
           # Compute loss
           loss = loss_function(y_prediction, y_actual)
-  
+
           # Backward pass()
           optimizer.zero_grad()
           loss.backward()
           optimizer.step()
-  
+
           # Print loss
           if i_batch % 100 == 0:
               print('epoch {}/{}, iteration {}/{}, loss = {}'.format(epoch, (epochs-1), i_batch, int(len(dataset) / batch_size - 1), loss.item()))
@@ -99,7 +103,7 @@ def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, mod
                     "loss": loss.item(),
                     "batch_size": batch_size,
                     }, model_name)
-  
+
   # Finish up
   print('elapsed time: {}'.format(time.time() - start_time))
   model_name = 'log/' + str(int(start_time)) + '_end_feed_forward.tar'
@@ -113,9 +117,6 @@ def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, mod
   print('saved model: '+ model_name)
 
 def create_dataloaders(batch_size):
-  # Create dataset
-  dataset = KittiDataset(SEQ_DIR, POSES_DIR, OXTS_DIR, transform=transforms.Compose([ToTensor()]))
-  
   # Load dataset
   sampler = SubsetSampler(20)
   train_dataloader = DataLoader(
@@ -130,13 +131,14 @@ def create_dataloaders(batch_size):
                           )
   return train_dataloader, dataloader_sampler
 
-  
+
 def main():
-  batch_size = 4
+  print("Creating dataloaders...")
   train_dataloader, dataloader_sampler = create_dataloaders(batch_size)
+  print("Done.")
 
   # Construct feed forward CNN model
-  model = FeedForwardCNN(image_channels=6, image_dims=np.array((50, 150)), z_dim=2, output_covariance=False, batch_size)
+  model = FeedForwardCNN(image_channels=6, image_dims=np.array((50, 150)), z_dim=2, output_covariance=False, batch_size=batch_size)
   model = model.to(device)  # move model to speicified device
   print(model)
 

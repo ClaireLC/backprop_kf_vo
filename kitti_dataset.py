@@ -26,7 +26,7 @@ class KittiDataset(Dataset):
       oxts_dir: path to root directory of ground truth GPS/IMU data, which contain velocities
       trnasform: optional transform to be applied on a sample
     """
-    
+
     self.seq_dir = seq_dir
     self.oxts_dir = oxts_dir
     self.poses_dir = poses_dir
@@ -51,7 +51,7 @@ class KittiDataset(Dataset):
     for i in range(len(self.seq_len)):
       start = prev + 1
       end = prev + 2 * self.seq_len[i]
-      self.seq_ranges[i] = (start,end)  
+      self.seq_ranges[i] = (start,end)
       prev = end
     #print(self.seq_ranges)
 
@@ -62,7 +62,7 @@ class KittiDataset(Dataset):
     # Now, double total length because we consider images from each camera as separate data points
     total_len *= 2
     return total_len
-    
+
   def __getitem__(self, idx):
     # Decompose index into sequence number and frame number
     idx += 1
@@ -72,7 +72,7 @@ class KittiDataset(Dataset):
     for key, val in self.seq_ranges.items():
       if ((idx >= val[0]) and (idx <= val[1])):
         seq_num = key
-  
+
     # Use sequence number to determine camera and frame number
     if ((idx >= self.seq_ranges[seq_num][0]) and (idx <= self.seq_ranges[seq_num][0] + self.seq_len[seq_num] - 1)):
       frame_num = idx - self.seq_ranges[seq_num][0] + 1
@@ -80,13 +80,13 @@ class KittiDataset(Dataset):
     else:
       frame_num = idx - self.seq_ranges[seq_num][0] - self.seq_len[seq_num] + 1
       cam_num = "image_3"
-    
+
     #print(seq_num, frame_num, cam_num)
 
     # Get current and difference images
     frame_digits = 6
     seq_digits = 2
-  
+
     seq_num_str = str(seq_num).zfill(seq_digits)
     frame_num_str = str(frame_num).zfill(frame_digits) + ".png"
 
@@ -104,7 +104,7 @@ class KittiDataset(Dataset):
         pose_str = line
       if i > frame_num - 1:
         break
-    pose = [float(s) for s in pose_str.split(" ")] 
+    pose = [float(s) for s in pose_str.split(" ")]
     #print(pose)
 
     # Get ground truth velocities from oxts frame_num.txt file
@@ -112,7 +112,7 @@ class KittiDataset(Dataset):
     oxts_file_str = str(frame_num).zfill(oxts_file_digits)
     oxts_file_path = self.oxts_dir + seq_num_str + "/data/" + oxts_file_str + ".txt"
     #print(oxts_file_path)
-    
+
     for_vel_line_num = 8
     ang_vel_line_num = 19
 
@@ -130,13 +130,13 @@ class KittiDataset(Dataset):
 
     # Get timestamp
     times_path = self.seq_dir + seq_num_str + "/times.txt"
-    print(times_path)
+    #print(times_path)
     with open(times_path, "r") as fid:
       for i, line in enumerate(fid):
         if i == frame_num:
           curr_time = float(line)
           break
-  
+
     # Format sample
     sample= {
             "curr_im": curr_im,
@@ -149,12 +149,12 @@ class KittiDataset(Dataset):
     if self.transform:
       sample = self.transform(sample)
 
-    print(curr_time)
+    #print(curr_time)
     return sample
 
 class ToTensor(object):
   """ Convert ndarrays in sample to Tensors. """
-    
+
   def __call__(self, sample):
     curr_im = sample["curr_im"]
     diff_im = sample["diff_im"]
@@ -179,13 +179,13 @@ class ToTensor(object):
 class SubsetSampler(Sampler):
   def __init__(self, mask):
     self.mask = mask
-  
+
   def __iter__(self):
     return iter(range(self.mask))
 
   def __len__(self):
     return len(self.mask)
-    
+
 def main():
   seq_dir = "/mnt/disks/dataset/dataset_post/sequences/"
   poses_dir = "/mnt/disks/dataset/dataset/poses/"
@@ -196,7 +196,7 @@ def main():
   sample = dataset[20601-1]
   sample = dataset[21140-1]
   sample = dataset[0]
-  print(sample["curr_time"])
+  #print(sample["curr_time"])
 
 if __name__ == "__main__":
   main()
