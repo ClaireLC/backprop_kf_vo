@@ -18,7 +18,7 @@ class KittiDataset(Dataset):
     }
   """
 
-  def __init__(self, seq_dir, poses_dir, oxts_dir, transform=None):
+  def __init__(self, seq_dir, poses_dir, oxts_dir, transform=None, train=True, val_idx=9):
     """
     Args:
       seq_dir: path to root directory of preprocessed trajectory sequences
@@ -45,15 +45,30 @@ class KittiDataset(Dataset):
       9: 1200
       }
 
+    # Generate train or validation set
+    self.dataset = []
+    prev = 0
+    for key, val in self.seq_len.items():
+      # All frames are 1 indexed
+      val += 1
+      for frame_num in range(1, val):
+        self.dataset.append((key, frame_num, "image_2"))
+      for frame_num in range(1, val):
+        self.dataset.append((key, frame_num, "image_3"))
+    print(len(self.dataset), self.__len__())
+    assert(len(self.dataset) == self.__len__())
+      
+    
     # Generate global frame ranges for each sequence
     self.seq_ranges = {}
     prev = 0
     for i in range(len(self.seq_len)):
       start = prev + 1
       end = prev + 2 * self.seq_len[i]
-      self.seq_ranges[i] = (start,end)  
+      self.seq_ranges[i] = (start,end)
       prev = end
     #print(self.seq_ranges)
+    
 
   def __len__(self):
     total_len = 0
