@@ -1,5 +1,6 @@
 import numpy as np
 import time
+from datetime import datetime
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -28,22 +29,23 @@ def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, mod
                     start training model from scratch.
     model_id: timestamp of model whose checkpoint we want to load
   """
-
-  print("Training feed forward CNN with lr =", str(lr))
+  lr_str = "{0:.2e}".format(lr)
+  print("Training feed forward CNN with lr =", lr_str)
 
   # Create loss_file name using starting time to log training process
   if starting_epoch >= 0:
     start_time = model_id
   else:
     start_time = time.time()
+    start_time_str = datetime.utcfromtimestamp(start_time).strftime('%Y-%m-%d_%H_%M')
 
   # Logs all files
-  loss_file = 'log/' + str(int(start_time)) + '_lr_' + str(lr) + '_loss.txt'
-  val_loss_file = 'log/' + str(int(start_time)) + '_lr_' + str(lr) + '_val_loss.txt'
+  loss_file = 'log/' + start_time_str + '_lr_' + lr_str + '_loss.txt'
+  val_loss_file = 'log/' + start_time_str + '_lr_' + lr_str + '_val_loss.txt'
 
   # If we are starting from a saved checkpoint epoch, load that checkpoint
   if starting_epoch >= 0:
-    checkpoint_path = "log/" + str(int(start_time)) + "_" + str(starting_epoch) + "_feed_forward.tar"
+    checkpoint_path = "log/" + start_time_str + "_" + str(starting_epoch) + "_feed_forward.tar"
     checkpoint = torch.load(checkpoint_path)
     model.load_state_dict(checkpoint['model_state_dict'])
     optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
@@ -105,7 +107,7 @@ def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, mod
     # Save the best model after each epoch based on the lowest achieved validation loss
     if lowest_loss is None or lowest_loss > val_loss:
       lowest_loss = val_loss
-      model_name = 'log/' + str(int(start_time)) + '_bestloss_feed_forward.tar'
+      model_name = 'log/' + start_time_str + '_bestloss_feed_forward.tar'
       torch.save({
                   "epoch": epoch,
                   "model_state_dict": model.state_dict(),
@@ -116,7 +118,7 @@ def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, mod
 
   # Finish up. End of training
   print('elapsed time: {}'.format(time.time() - start_time))
-  model_name = 'log/' + str(int(start_time)) + '_end_feed_forward.tar'
+  model_name = 'log/' + start_time_str + '_end_feed_forward.tar'
   torch.save({
               "epoch": epochs, # the end
               "model_state_dict": model.state_dict(),
