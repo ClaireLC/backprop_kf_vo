@@ -33,6 +33,53 @@ class KittiDataset(Dataset):
     self.poses_dir = poses_dir
     self.transform = transform
 
+    self.dataset = None
+    self.process_dataset(train)
+
+
+  def __len__(self):
+    return len(self.dataset)
+
+
+  def __getitem__(self, idx):
+    # Directly index into dataset list to get data sample information
+    curr_im_path, diff_im_path, velocity, seq_num_str = self.dataset[idx]
+
+    curr_im = io.imread(curr_im_path)
+    diff_im = io.imread(diff_im_path)
+
+    # Currently the cnn doesn't use this. Commented out to speed up dataloader
+    #pose = self.get_groudtruth_poses(seq_num_str)
+
+    # Currently the cnn doesn't use this. Commented out to speed up DataLoader
+    # curr_time = self.get_timestamp(self, seq_num_str)
+
+    # Format sample
+    sample= {
+            "curr_im": curr_im,
+            "diff_im": diff_im,
+            "vel": velocity,
+            #"pose": np.asarray(pose),
+            #"curr_time": np.asarray(curr_time),
+            }
+
+    if self.transform:
+      sample = self.transform(sample)
+
+    return sample
+
+
+  def process_dataset(self, train):
+    """
+    Creates a list of tuples. Each tuple corresponds to a data sample and contains information 
+    that need to be retrieved by __getitem__
+
+    The list is stored in self.dataset
+    Tuple format: (curr_im_path, diff_im_path, velocity, seq_num_str)
+    --> (current image path, diff image path, [forward velocity, angular velocity],
+         sequence number padded with zeros in front)
+    """
+    # Sequences and how many data samples each sequence contains. Numbers should be x2 for two cameras
     self.seq_len = {
       0: 4540,
       1: 1100,
@@ -46,6 +93,35 @@ class KittiDataset(Dataset):
       9: 1200
       }
 
+    # Update self.dataset to contain list of (seq_num, frame_num, cam_num)
+    self.create_data_tuples(train)
+
+    # Clean up the data inside dataset
+    formated_dataset = []
+    for sample in self.dataset:
+        seq_num, frame_num, cam_num = int(sample[0]), int(sample[1]), sample[2]
+
+        # Pad sequence number with zeros in front
+        seq_digits = 2 
+        seq_num_str = str(seq_num).zfill(seq_digits)
+
+        # Get images
+        curr_im_path, diff_im_path = self.get_image_paths(seq_num_str, frame_num, cam_num)
+        # Get velocity: [for_vel, ang_vel]
+        velocity = self.get_velocity(seq_num_str, frame_num)
+
+        formated_dataset.append(curr_im_path, diff_im_path, velocity, seq_num_str)
+
+    self.dataset = formated_dataset
+
+
+  def create_data_tuples(self, train):
+    """
+    Processes or loads all the data according to its sequence number, frame number and camera number
+    and stores this information in a tuple of three.
+    train: Indicates whether the dataset should be be train or val
+    self.dataset in the end is a list of all the tuples corresponding to the train or val data samples
+    """
     # Store / load the train val dataset
     self.dataset = []
     # If split data exists
@@ -69,37 +145,15 @@ class KittiDataset(Dataset):
     # Split the data that's created or loaded
     train_dataset, val_dataset = np.split(self.dataset, [int(0.9 * len(self.dataset))])
     if train:
-      self.data = train_dataset
+      self.dataset = train_dataset
     else:
-      self.data = val_dataset
-
-    # Clean up the data types inside dataset
-    self.dataset = []
-    for sample in self.data:
-        self.dataset.append((int(sample[0]), int(sample[1]), sample[2]))
-    #print(len(self.dataset))
-
-  def __len__(self):
-    return len(self.dataset)
+      self.dataset = val_dataset
 
 
-  def __getitem__(self, idx):
-    # Directly index into dataset list to get data sample information
-    seq_num, frame_num, cam_num = self.dataset[idx]
-
-    # Get current and difference images
-    frame_digits = 6
-    seq_digits = 2
-
-    seq_num_str = str(seq_num).zfill(seq_digits)
-    frame_num_str = str(frame_num).zfill(frame_digits) + ".png"
-
-    curr_im_path = self.seq_dir + seq_num_str + "/" + cam_num + "/current/" + frame_num_str
-    diff_im_path = self.seq_dir + seq_num_str + "/" + cam_num + "/diff/" + frame_num_str
-    curr_im = io.imread(curr_im_path)
-    diff_im = io.imread(diff_im_path)
-
-    # Get ground truth pose from seq_num.txt file
+  def get_groudtruth_poses(self, seq_num_str):
+    """
+    Gets ground truth pose from seq_num.txt file
+    """
     poses_file_path = self.poses_dir + seq_num_str + ".txt"
     fid = open(poses_file_path)
     pose_str = None
@@ -109,52 +163,55 @@ class KittiDataset(Dataset):
       if i > frame_num - 1:
         break
     pose = [float(s) for s in pose_str.split(" ")]
-    #print(pose)
+    return pose
 
-    # Get ground truth velocities from oxts frame_num.txt file
-    oxts_file_digits = 10
-    oxts_file_str = str(frame_num).zfill(oxts_file_digits)
-    oxts_file_path = self.oxts_dir + seq_num_str + "/data/" + oxts_file_str + ".txt"
-    #print(oxts_file_path)
 
-    for_vel_line_num = 8
-    ang_vel_line_num = 19
-
-    for_vel = None
-    ang_vel = None
-
-    fid = open(oxts_file_path)
-    pose_str = None
-    line = fid.readlines()
-    oxts_data = [float(s) for s in line[0].split(" ")]
-    for_vel = oxts_data[for_vel_line_num]
-    ang_vel = oxts_data[ang_vel_line_num]
-    #print(oxts_data)
-    #print(for_vel, ang_vel)
-
-    # Get timestamp
+  def get_timestamp(self, seq_num_str):
+    """
+    Gets timestamp
+    """
     times_path = self.seq_dir + seq_num_str + "/times.txt"
-    #print(times_path)
     with open(times_path, "r") as fid:
       for i, line in enumerate(fid):
         if i == frame_num:
           curr_time = float(line)
-          break
+          return curr_time
 
-    # Format sample
-    sample= {
-            "curr_im": curr_im,
-            "diff_im": diff_im,
-            "pose": np.asarray(pose),
-            "vel": np.asarray([for_vel,ang_vel]),
-            "curr_time": np.asarray(curr_time),
-            }
 
-    if self.transform:
-      sample = self.transform(sample)
+  def get_image_paths(self, seq_num_str, frame_num, cam_num):
+    """
+    Input: seq_num zero padded, frame_num, cam_num
+    Output: current image path, diff image path
+    """
+    frame_digits = 6
+    frame_num_str = str(frame_num).zfill(frame_digits) + ".png"
 
-    #print(curr_time)
-    return sample
+    curr_im_path = self.seq_dir + seq_num_str + "/" + cam_num + "/current/" + frame_num_str
+    diff_im_path = self.seq_dir + seq_num_str + "/" + cam_num + "/diff/" + frame_num_str
+
+    return curr_im_path, diff_im_path
+
+
+  def get_velocity(self, seq_num_str, frame_num):
+    """
+    Returns [forward velocity, angular velocity]
+    """
+    oxts_file_digits = 10
+    oxts_file_str = str(frame_num).zfill(oxts_file_digits)
+    oxts_file_path = self.oxts_dir + seq_num_str + "/data/" + oxts_file_str + ".txt"
+
+    for_vel_line_num = 8
+    ang_vel_line_num = 19
+
+    with open(oxts_file_path, 'r') as f:
+      line = f.readline()
+      oxts_data = [float(vel) for vel in line.split(" ")]
+
+    for_vel = oxts_data[for_vel_line_num]
+    ang_vel = oxts_data[ang_vel_line_num]
+
+    return np.asarray([for_vel, ang_vel])
+
 
 class ToTensor(object):
   """ Convert ndarrays in sample to Tensors. """
