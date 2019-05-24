@@ -33,9 +33,19 @@ class KittiDataset(Dataset):
     self.poses_dir = poses_dir
     self.transform = transform
 
+    # Load existing parsed data if possible. Otherwise create and store them.
     self.dataset = None
-    self.process_dataset(train)
-
+    if train and os.path.isfile("train_dataset.npy"):
+      self.dataset = np.load("train_dataset.npy")
+    elif not train and os.path.isfile("val_dataset.npy"):
+      self.dataset = np.load("val_dataset.npy")
+    else:
+      self.process_dataset(train)
+      if train:
+        np.save("train_dataset", np.asarray(self.dataset))
+      else:
+        np.save("val_dataset", np.asarray(self.dataset))
+        
 
   def __len__(self):
     return len(self.dataset)
