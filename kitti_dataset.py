@@ -46,20 +46,32 @@ class KittiDataset(Dataset):
       9: 1200
       }
 
-    # TODO
     # Store / load the train val dataset
-    # Shuffle then split
+    # If split data exists
+    if os.path.isfile("train_val_split.npy"):
+      self.dataset = np.load("train_val_split.npy")
+    else:
+      # Generate train or validation set
+      self.dataset = []
+      for key, val in self.seq_len.items():
+        # All frames are 1 indexed
+        val += 1
+        for frame_num in range(1, val):
+          self.dataset.append((key, frame_num, "image_2"))
+        for frame_num in range(1, val):
+          self.dataset.append((key, frame_num, "image_3"))
 
-    # Generate train or validation set
-    self.dataset = []
-    for key, val in self.seq_len.items():
-      # All frames are 1 indexed
-      val += 1
-      for frame_num in range(1, val):
-        self.dataset.append((key, frame_num, "image_2"))
-      for frame_num in range(1, val):
-        self.dataset.append((key, frame_num, "image_3"))
+      # Save the data distribution
+      self.dataset = np.asarray(self.dataset)
+      np.random.shuffle(self.dataset)
+      np.save("train_val_split", self.dataset)
 
+    # Split the data that's created or loaded
+    train_dataset, val_dataset = np.split(self.dataset, [int(0.9 * len(self.dataset))])
+    if train:
+      self.dataset = train_dataset
+    else:
+      self.dataset = val_dataset
     #print(len(self.dataset))
 
   def __len__(self):
