@@ -47,12 +47,12 @@ class KittiDataset(Dataset):
       }
 
     # Store / load the train val dataset
+    self.dataset = []
     # If split data exists
     if os.path.isfile("train_val_split.npy"):
       self.dataset = np.load("train_val_split.npy")
     else:
       # Generate train or validation set
-      self.dataset = []
       for key, val in self.seq_len.items():
         # All frames are 1 indexed
         val += 1
@@ -69,9 +69,14 @@ class KittiDataset(Dataset):
     # Split the data that's created or loaded
     train_dataset, val_dataset = np.split(self.dataset, [int(0.9 * len(self.dataset))])
     if train:
-      self.dataset = train_dataset
+      self.data = train_dataset
     else:
-      self.dataset = val_dataset
+      self.data = val_dataset
+
+    # Clean up the data types inside dataset
+    self.dataset = []
+    for sample in self.data:
+        self.dataset.append((int(sample[0]), int(sample[1]), sample[2]))
     #print(len(self.dataset))
 
   def __len__(self):
