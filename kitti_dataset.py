@@ -1,6 +1,7 @@
 import os
 import torch
 import numpy as np
+from tqdm import tqdm
 from torch.utils.data import Dataset, DataLoader, Sampler
 from torchvision import transforms, utils
 from skimage import io
@@ -45,7 +46,7 @@ class KittiDataset(Dataset):
         np.save("train_dataset", np.asarray(self.dataset))
       else:
         np.save("val_dataset", np.asarray(self.dataset))
-        
+
 
   def __len__(self):
     return len(self.dataset)
@@ -108,7 +109,7 @@ class KittiDataset(Dataset):
 
     # Clean up the data inside dataset
     formated_dataset = []
-    for sample in self.dataset:
+    for sample in tqdm(self.dataset):
         seq_num, frame_num, cam_num = int(sample[0]), int(sample[1]), sample[2]
 
         # Pad sequence number with zeros in front
@@ -229,9 +230,9 @@ class ToTensor(object):
   def __call__(self, sample):
     curr_im = sample["curr_im"]
     diff_im = sample["diff_im"]
-    pose    = sample["pose"]
     vel = sample["vel"]
-    curr_time = sample["curr_time"]
+    #pose    = sample["pose"]
+    #curr_time = sample["curr_time"]
 
     # Swap image axes because
     # numpy image: H x W x C
@@ -242,9 +243,9 @@ class ToTensor(object):
     return {
             "curr_im": torch.from_numpy(curr_im),
             "diff_im": torch.from_numpy(diff_im),
-            "pose":    torch.from_numpy(pose),
             "vel":     torch.from_numpy(vel),
-            "curr_time": torch.from_numpy(curr_time),
+            #"pose":    torch.from_numpy(pose),
+            #"curr_time": torch.from_numpy(curr_time),
             }
 
 class SubsetSampler(Sampler):
