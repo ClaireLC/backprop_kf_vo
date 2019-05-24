@@ -18,16 +18,14 @@ class KittiDataset(Dataset):
     }
   """
 
-  def __init__(self, seq_dir, poses_dir, oxts_dir, transform=None, train=True, val_idx=9):
+  def __init__(self, seq_dir, poses_dir, oxts_dir, transform=None, train=True):
     """
     Args:
       seq_dir: path to root directory of preprocessed trajectory sequences
       poses_dir: path to root directory of ground truth poses
       oxts_dir: path to root directory of ground truth GPS/IMU data, which contain velocities
       trnasform: optional transform to be applied on a sample
-      train: when True, creates training set, skipping val_idx sequence.
-        When false, creates validation set, containing only val_idx sequences
-      val_idx: The index that specifies which sequence should be the validation set. range 0-9
+      train: when True, creates training set, else creates validation set
     """
 
     self.seq_dir = seq_dir
@@ -48,19 +46,20 @@ class KittiDataset(Dataset):
       9: 1200
       }
 
+    # TODO
+    # Store / load the train val dataset
+    # Shuffle then split
+
     # Generate train or validation set
     self.dataset = []
     for key, val in self.seq_len.items():
-      # Skip the validation set when creating training set
-      # Skip everything else when creating validation set
-      if (train and key == val_idx) or (not train and key != val_idx):
-          continue
       # All frames are 1 indexed
       val += 1
       for frame_num in range(1, val):
         self.dataset.append((key, frame_num, "image_2"))
       for frame_num in range(1, val):
         self.dataset.append((key, frame_num, "image_3"))
+
     #print(len(self.dataset))
 
   def __len__(self):
