@@ -19,7 +19,7 @@ OXTS_DIR = "/mnt/disks/dataset/dataset_post/oxts/"
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Global parameters
-batch_size = 10
+batch_size = 50
 epochs = 100
 
 def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, model_id=None,
