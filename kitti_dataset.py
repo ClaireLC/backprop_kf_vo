@@ -71,7 +71,7 @@ class KittiDataset(Dataset):
 
   def process_dataset(self, train):
     """
-    Creates a list of tuples. Each tuple corresponds to a data sample and contains information 
+    Creates a list of tuples. Each tuple corresponds to a data sample and contains information
     that need to be retrieved by __getitem__
 
     The list is stored in self.dataset
@@ -102,7 +102,7 @@ class KittiDataset(Dataset):
         seq_num, frame_num, cam_num = int(sample[0]), int(sample[1]), sample[2]
 
         # Pad sequence number with zeros in front
-        seq_digits = 2 
+        seq_digits = 2
         seq_num_str = str(seq_num).zfill(seq_digits)
 
         # Get images
@@ -110,7 +110,7 @@ class KittiDataset(Dataset):
         # Get velocity: [for_vel, ang_vel]
         velocity = self.get_velocity(seq_num_str, frame_num)
 
-        formated_dataset.append(curr_im_path, diff_im_path, velocity, seq_num_str)
+        formated_dataset.append((curr_im_path, diff_im_path, velocity, seq_num_str))
 
     self.dataset = formated_dataset
 
