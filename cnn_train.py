@@ -86,7 +86,7 @@ def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, mod
 
         # Print loss
         if i_batch % 100 == 0:
-            print('epoch {}/{}, iteration {}/{}, loss = {}'.format(epoch, (epochs-1), i_batch, int(len(train_dataloader) / batch_size - 1), loss.item()))
+            print('epoch {}/{}, iteration {}/{}, loss = {}'.format(epoch, (epochs-1), i_batch, len(train_dataloader) - 1, loss.item()))
             losses.append(loss.item())
             current_error = torch.norm(y_prediction-y_actual)
             errors.append(current_error)
@@ -107,7 +107,7 @@ def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, mod
     # Save the best model after each epoch based on the lowest achieved validation loss
     if lowest_loss is None or lowest_loss > val_loss:
       lowest_loss = val_loss
-      model_name = 'log/' + start_time_str + '_bestloss_feed_forward.tar'
+      model_name = 'log/' + start_time_str + '_' + lr_str  + '_bestloss_feed_forward.tar'
       torch.save({
                   "epoch": epoch,
                   "model_state_dict": model.state_dict(),
@@ -118,7 +118,7 @@ def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, mod
 
   # Finish up. End of training
   print('elapsed time: {}'.format(time.time() - start_time))
-  model_name = 'log/' + start_time_str + '_end_feed_forward.tar'
+  model_name = 'log/' + start_time_str + '_' + lr_str +  '_end_feed_forward.tar'
   torch.save({
               "epoch": epochs, # the end
               "model_state_dict": model.state_dict(),
