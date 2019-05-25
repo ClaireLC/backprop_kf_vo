@@ -19,7 +19,7 @@ class KittiDataset(Dataset):
     }
   """
 
-  def __init__(self, seq_dir, poses_dir, oxts_dir, transform=None, train=True):
+  def __init__(self, seq_dir, poses_dir, oxts_dir, transform=None, mode=None):
     """
     Args:
       seq_dir: path to root directory of preprocessed trajectory sequences
@@ -36,16 +36,20 @@ class KittiDataset(Dataset):
 
     # Load existing parsed data if possible. Otherwise create and store them.
     self.dataset = None
-    if train and os.path.isfile("train_dataset.npy"):
-      self.dataset = np.load("train_dataset.npy")
-    elif not train and os.path.isfile("val_dataset.npy"):
-      self.dataset = np.load("val_dataset.npy")
+    if mode == "infer" and os.path.isfile("inorder_dataset.npy"):
+      self.dataset = np.load("inorder_dataset.npy", allow_pickle=True)
+    elif mode == "train" and os.path.isfile("train_dataset.npy"):
+      self.dataset = np.load("train_dataset.npy", allow_pickle=True)
+    elif mode == "val" and os.path.isfile("val_dataset.npy"):
+      self.dataset = np.load("val_dataset.npy", allow_pickle=True)
     else:
-      self.process_dataset(train)
-      if train:
+      self.process_dataset(mode)
+      if mode == "train":
         np.save("train_dataset", np.asarray(self.dataset))
-      else:
+      elif mode == "val":
         np.save("val_dataset", np.asarray(self.dataset))
+      elif mode == "infer":
+        np.save("inorder_dataset", np.asarray(self.dataset))
 
 
   def __len__(self):
@@ -80,7 +84,7 @@ class KittiDataset(Dataset):
     return sample
 
 
-  def process_dataset(self, train):
+  def process_dataset(self, mode):
     """
     Creates a list of tuples. Each tuple corresponds to a data sample and contains information
     that need to be retrieved by __getitem__
@@ -105,7 +109,7 @@ class KittiDataset(Dataset):
       }
 
     # Update self.dataset to contain list of (seq_num, frame_num, cam_num)
-    self.create_data_tuples(train)
+    self.create_data_tuples(mode)
 
     # Clean up the data inside dataset
     formated_dataset = []
@@ -126,7 +130,7 @@ class KittiDataset(Dataset):
     self.dataset = formated_dataset
 
 
-  def create_data_tuples(self, train):
+  def create_data_tuples(self, mode):
     """
     Processes or loads all the data according to its sequence number, frame number and camera number
     and stores this information in a tuple of three.
@@ -135,30 +139,48 @@ class KittiDataset(Dataset):
     """
     # Store / load the train val dataset
     self.dataset = []
-    # If split data exists
-    if os.path.isfile("train_val_split.npy"):
-      self.dataset = np.load("train_val_split.npy")
-    else:
-      # Generate train or validation set
-      for key, val in self.seq_len.items():
-        # All frames are 1 indexed
-        val += 1
-        for frame_num in range(1, val):
-          self.dataset.append((key, frame_num, "image_2"))
-        for frame_num in range(1, val):
-          self.dataset.append((key, frame_num, "image_3"))
 
-      # Save the data distribution
-      self.dataset = np.asarray(self.dataset)
-      np.random.shuffle(self.dataset)
-      np.save("train_val_split", self.dataset)
+    if mode == "infer":
+      if os.path.isfile("inorder_dataset.npy"):
+        self.dataset = np.load("inorder_dataset.npy", )
+      else:
+        # Generate train or validation set
+        for key, val in self.seq_len.items():
+          # All frames are 1 indexed
+          val += 1
+          for frame_num in range(1, val):
+            self.dataset.append((key, frame_num, "image_2"))
+          for frame_num in range(1, val):
+            self.dataset.append((key, frame_num, "image_3"))
 
-    # Split the data that's created or loaded
-    train_dataset, val_dataset = np.split(self.dataset, [int(0.9 * len(self.dataset))])
-    if train:
-      self.dataset = train_dataset
+        # Save the data distribution in order
+        self.dataset = np.asarray(self.dataset)
+        np.save("inorder_dataset", self.dataset)
     else:
-      self.dataset = val_dataset
+      # If split data exists
+      if os.path.isfile("train_val_split.npy"):
+        self.dataset = np.load("train_val_split.npy")
+      else:
+        # Generate train or validation set
+        for key, val in self.seq_len.items():
+          # All frames are 1 indexed
+          val += 1
+          for frame_num in range(1, val):
+            self.dataset.append((key, frame_num, "image_2"))
+          for frame_num in range(1, val):
+            self.dataset.append((key, frame_num, "image_3"))
+
+        # Shuffle and save the data distribution
+        self.dataset = np.asarray(self.dataset)
+        np.random.shuffle(self.dataset)
+        np.save("train_val_split", self.dataset)
+
+      # Split the data that's created or loaded
+      train_dataset, val_dataset = np.split(self.dataset, [int(0.9 * len(self.dataset))])
+      if mode == "train":
+        self.dataset = train_dataset
+      elif mode == "val":
+        self.dataset = val_dataset
 
 
   def get_groudtruth_poses(self, seq_num_str):
@@ -210,6 +232,7 @@ class KittiDataset(Dataset):
     oxts_file_digits = 10
     oxts_file_str = str(frame_num).zfill(oxts_file_digits)
     oxts_file_path = self.oxts_dir + seq_num_str + "/data/" + oxts_file_str + ".txt"
+    print(oxts_file_path)
 
     for_vel_line_num = 8
     ang_vel_line_num = 19
@@ -257,6 +280,47 @@ class SubsetSampler(Sampler):
 
   def __len__(self):
     return self.mask
+
+class SequenceSampler(Sampler):
+  """
+  Samples a specified sequence and camera id trajectory from the dataset
+  """
+  def __init__(self, sequence_num, camera_num):
+    """
+    sequence_num: sequence 0-9
+    camera_num: camera image 2 or 3 (left or right camera)
+    """
+    # Sequences and how many data samples each sequence contains. Numbers should be x2 for two cameras
+    self.seq_len = {
+      0: 4540,
+      1: 1100,
+      2: 4660,
+      3: 270,
+      4: 2760,
+      5: 1100,
+      6: 1100,
+      7: 4070,
+      8: 1590,
+      9: 1200
+      }
+
+    # Calculate start and end indexes in dataset for given sequence num and camera num
+    self.start_ind = 0
+
+    for i in range(sequence_num):
+      self.start_ind += self.seq_len[i] * 2
+
+    # Offset for second camera
+    self.start_ind += (camera_num - 2) * self.seq_len[sequence_num]
+
+    self.end_ind = self.start_ind + self.seq_len[sequence_num] - 1
+    print("start {} end {}".format(self.start_ind, self.end_ind))
+
+  def __iter__(self):
+    return iter(range(self.start_ind, self.end_ind + 1))
+
+  def __len__(self):
+    return self.end_ind - self.start_ind + 1
 
 def main():
   seq_dir = "/mnt/disks/dataset/dataset_post/sequences/"

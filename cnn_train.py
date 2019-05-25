@@ -169,8 +169,8 @@ def create_dataloaders(dataset, batch_size, sampler=None):
 def main():
   print("Creating dataloaders...")
   # Create dataset
-  train_dataset = KittiDataset(SEQ_DIR, POSES_DIR, OXTS_DIR, transform=transforms.Compose([ToTensor()]))
-  val_dataset = KittiDataset(SEQ_DIR, POSES_DIR, OXTS_DIR, transform=transforms.Compose([ToTensor()]), train=False)
+  train_dataset = KittiDataset(SEQ_DIR, POSES_DIR, OXTS_DIR, transform=transforms.Compose([ToTensor()]), mode="train")
+  val_dataset = KittiDataset(SEQ_DIR, POSES_DIR, OXTS_DIR, transform=transforms.Compose([ToTensor()]), mode="val")
   sampler = SubsetSampler(20)
 
   train_dataloader = create_dataloaders(train_dataset, batch_size)
