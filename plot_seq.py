@@ -23,24 +23,24 @@ def plot_seq(dataset_type, traj_num):
   
   elif dataset_type == "ouija":
     file_path = "../test_traj_" + traj_name.zfill(1) + "/data.txt"
-    x_ind = 0
-    y_ind = 1
-    x_vel_ind = 7
-    y_vel_ind = 8
+    x_ind = 1
+    y_ind = 2
+    x_vel_ind = 8
+    y_vel_ind = 9
     with open(file_path, "r") as fid:
       reader = csv.reader(fid, delimiter=",")
       next(reader)
       for row in reader:
         x.append(float(row[x_ind]))
-        y.append(float(row[y_ind]))
+        y.append(-1*float(row[y_ind]))
         x_vel.append(float(row[x_vel_ind]))
         y_vel.append(float(row[y_vel_ind]))
 
-  plt.plot(x,y)
-  plt.plot(x[0],y[0],'ro')
+  plt.plot(y,x)
+  plt.plot(y[0],x[0],'ro')
   plt.figure()
   plt.plot(range(len(x_vel)),x_vel)  
-  plt.plot(range(len(y_vel)),y_vel)  
+  #plt.plot(range(len(y_vel)),y_vel)  
   plt.show()
 
 def main(dataset_type, traj_name):
