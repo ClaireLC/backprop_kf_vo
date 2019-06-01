@@ -69,6 +69,7 @@ total_step = len(train_loader)
 losses = []
 start_time = time.time()
 for epoch in range(num_epochs):
+    # minibatch dim (N, img, (x0, y0, vx0, vy0))
     for i, minibatch in enumerate(train_loader):
         images = torch.stack([minibatch[ii][0] for ii in range(len(minibatch))]).float().to(device)
         μ0s = torch.cat([minibatch[0][1][:, 2:5], minibatch[0][1][:, 0:2]], 1).float().to(device) # make the column order (velocities, states)
