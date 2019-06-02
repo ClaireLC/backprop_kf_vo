@@ -6,7 +6,7 @@ import torch.nn as nn
 from matplotlib import pyplot as plt
 
 from synth_vis_state_est_data_generator import SynthVisStateEstDataGenerator
-from feed_forward_cnn import FeedForwardCNN
+from models.feed_forward_cnn_model import FeedForwardCNN
 from kalmanfilter_rnn import KalmanFilterRNN
 
 # Set device
@@ -30,7 +30,7 @@ trained_cnn_path = "models/1556733699_feed_forward" # image_size=128, output_cov
 
 # Load Dataset
 backpropkf_dataset = SynthVisStateEstDataGenerator(b_load_data=True,
-                                                   path_to_file="datasets/dataset_N100_T100.pkl",
+                                                   path_to_file=None,
                                                    num_simulations=num_samples,
                                                    num_timesteps=seq_length,
                                                    image_dims=image_dims)
@@ -57,7 +57,7 @@ model = KalmanFilterRNN(backpropkf_dataset.k,
                         backpropkf_dataset.dt,
                         image_size,
                         device,
-                        trained_cnn_path=trained_cnn_path,
+                        trained_cnn_path=None, #trained_cnn_path,
                         end_to_end_flag=False).to(device)
 
 # MSE Loss, Adam Optimizer
@@ -72,9 +72,15 @@ for epoch in range(num_epochs):
     # minibatch dim (N, img, (x0, y0, vx0, vy0))
     for i, minibatch in enumerate(train_loader):
         images = torch.stack([minibatch[ii][0] for ii in range(len(minibatch))]).float().to(device)
-        μ0s = torch.cat([minibatch[0][1][:, 2:5], minibatch[0][1][:, 0:2]], 1).float().to(device) # make the column order (velocities, states)
+        μ0s = torch.cat([minibatch[0][1][:, 2:4], minibatch[0][1][:, 0:2]], 1).float().to(device) # make the column order (velocities, states)
         positions = torch.stack([minibatch[ii][1][:, 0:2] for ii in range(len(minibatch))]).float().to(device)
         velocities = torch.stack([minibatch[ii][1][:, 2:4] for ii in range(len(minibatch))]).float().to(device)
+        print(len(minibatch))
+        print(minibatch[0][1])
+        print(μ0s.shape)
+        print(positions.shape)
+        print(velocities.shape)
+        break
         
         # Forward pass
         outputs = model(images, μ0s, output_belief_states=False)

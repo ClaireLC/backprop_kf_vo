@@ -326,14 +326,16 @@ def main():
   seq_dir = "/mnt/disks/dataset/dataset_post/sequences/"
   poses_dir = "/mnt/disks/dataset/dataset/poses/"
   oxts_dir = "/mnt/disks/dataset/dataset_post/oxts/"
-  dataset_1 = KittiDataset(seq_dir, poses_dir, oxts_dir, transform=transforms.Compose([ToTensor()]))
-  dataset_2 = KittiDataset(seq_dir, poses_dir, oxts_dir, transform=transforms.Compose([ToTensor()]), train=False)
-  print(len(dataset_1), len(dataset_2))
+  dataset_1 = KittiDataset(seq_dir, poses_dir, oxts_dir, transform=transforms.Compose([ToTensor()]), mode="train")
+  #dataset_2 = KittiDataset(seq_dir, poses_dir, oxts_dir, transform=transforms.Compose([ToTensor()]), train=False)
+  #print(len(dataset_1), len(dataset_2))
 
-  sample = dataset_1[20601-1]
-  sample = dataset_1[21140-1]
+  ##sample = dataset_1[20601-1]
+  #sample = dataset_1[21140-1]
   sample = dataset_1[0]
+  print(sample)
   #print(sample["curr_time"])
+
 
 if __name__ == "__main__":
   main()

@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from feed_forward_cnn import FeedForwardCNN
+from models.feed_forward_cnn_model import FeedForwardCNN
 
 # Kalman Filter RNN
 class KalmanFilterRNN(nn.Module):
