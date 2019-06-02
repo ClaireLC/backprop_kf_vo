@@ -81,6 +81,7 @@ class SynthVisStateEstDataGenerator(Dataset):
         """
         :return: data[idx]  -- defines the behavior of the [] operator on the dataset
         """
+        # returns a list of tuples for sequence number idx
         return self.data[idx]
 
     def load_data(self, fn):
@@ -118,7 +119,7 @@ class SynthVisStateEstDataGenerator(Dataset):
         """
         ref for incremental loading/ saving of the pickle file:
             https://stackoverflow.com/questions/26394768/pickle-file-too-large-to-load
-        :return: data -- list of tuples, each is (image, dot_position, dot_velocity)
+        :return: data -- dictionary of list of tuples, each is (image, dot_position, dot_velocity)
         """
         data = dict()
         for sim_itr in range(self.num_simulations):
@@ -305,7 +306,7 @@ if __name__ == "__main__":
                         help='a boolean for if data should be saved (empty or false if not')
     parser.add_argument('-p', '--path_to_file', type=str, required=False,
                         help='path to load/save .pkl file')
-    parser.add_argument('-T', '--num_timesteps', type=int, required=False, default=100,
+    parser.add_argument('-T', '--num_timesteps', type=int, required=False, default=20,
                         help='number of timestamps for which each simulation rollout is run')
     parser.add_argument('-N', '--num_simulations', type=int, required=False, default=1,
                         help='number of simulations to run')

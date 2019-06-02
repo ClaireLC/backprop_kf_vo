@@ -14,8 +14,8 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 torch.cuda.empty_cache()
 
 # Data Parameters
-num_samples = 100
-seq_length = 100
+num_samples = 20
+seq_length = 20
 image_size = 128
 image_dims = np.array((image_size, image_size))
 minibatch_size = 4
@@ -76,7 +76,9 @@ for epoch in range(num_epochs):
         positions = torch.stack([minibatch[ii][1][:, 0:2] for ii in range(len(minibatch))]).float().to(device)
         velocities = torch.stack([minibatch[ii][1][:, 2:4] for ii in range(len(minibatch))]).float().to(device)
         print(len(minibatch))
-        print(minibatch[0][1])
+        print(minibatch[0][0].shape)
+        #print(minibatch[0][1])
+        print(images.shape)
         print(μ0s.shape)
         print(positions.shape)
         print(velocities.shape)
