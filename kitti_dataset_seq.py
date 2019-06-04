@@ -388,7 +388,7 @@ def main():
   dataset = KittiDatasetSeq(seq_dir, poses_dir, oxts_dir, mode="train")
 
   dataloader = DataLoader(dataset = dataset, batch_size = batch_size)
-
+  print(len(dataloader))
   for i, minibatch in enumerate(dataloader):
       # 100 sequences
       print(len(minibatch))
