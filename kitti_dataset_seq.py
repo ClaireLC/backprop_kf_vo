@@ -316,7 +316,14 @@ class KittiDatasetSeq(Dataset):
     return np.asarray([for_vel, ang_vel])
 
 
+class ToTensor(object):
+  """ Convert ndarrays in sample to Tensors. """
 
+  def __call__(self, sample):
+    result = []
+    for compos_image, state, cur_time in sample:
+      result.append((torch.from_numpy(compos_image), torch.from_numpy(state), torch.from_numpy(cur_time)))
+    return result
 
 
 class SubsetSampler(Sampler):
