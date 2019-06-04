@@ -82,12 +82,13 @@ for epoch in range(num_epochs):
         print(μ0s.shape)
         print(positions.shape)
         print(velocities.shape)
-        break
+        
         
         # Forward pass
         outputs = model(images, μ0s, output_belief_states=False)
+        print("outputs:", outputs.shape)
         loss = criterion(outputs, positions)
-        
+        break
         # Backward and optimize
         optimizer.zero_grad()
         loss.backward()

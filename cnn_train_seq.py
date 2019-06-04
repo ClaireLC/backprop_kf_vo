@@ -79,9 +79,9 @@ def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, mod
         # Format data
         # (T, N, 3, H, W)
         images = torch.stack([sample_batched[ii][0] for ii in range(len(sample_batched))]).float().to(device)
-        # (N, 6)
-        # make the column order (velocities, pose, time)
-        μ0s = torch.cat([sample_batched[0][1][:, 3:5], sample_batched[0][1][:, 0:3], sample_batched[0][2]], 1).float().to(device) 
+        # (N, 5)
+        # make the column order (velocities, pose)
+        μ0s = torch.cat([sample_batched[0][1][:, 3:5], sample_batched[0][1][:, 0:3]], 1).float().to(device) 
         # (T, N, 3)
         positions = torch.stack([sample_batched[ii][1][:, 0:3] for ii in range(len(sample_batched))]).float().to(device) #[x, y, theta] stacked
 

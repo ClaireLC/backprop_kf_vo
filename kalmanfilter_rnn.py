@@ -123,7 +123,7 @@ class KalmanFilterRNN(nn.Module):
                 # z: (N, 2) tensor
                 z = self.feedforward_net(o_)
                 (μ_output, Σ_output) = self.kf_update(μs[-1], Σs[-1], z)
-            # y_hat: (N, 4) tensor
+            # y_hat: (N, 2) tensor
             y_hat = (self.C @ μ_output.unsqueeze(-1)).squeeze(-1)
             μs.append(μ_output)
             Σs.append(Σ_output)
