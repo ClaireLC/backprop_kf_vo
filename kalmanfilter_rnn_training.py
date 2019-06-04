@@ -76,7 +76,7 @@ for epoch in range(num_epochs):
         positions = torch.stack([minibatch[ii][1][:, 0:2] for ii in range(len(minibatch))]).float().to(device)
         velocities = torch.stack([minibatch[ii][1][:, 2:4] for ii in range(len(minibatch))]).float().to(device)
         print(len(minibatch))
-        print(minibatch[0][0].shape)
+        print(type(minibatch[0][0]))
         #print(minibatch[0][1])
         print(images.shape)
         print(μ0s.shape)

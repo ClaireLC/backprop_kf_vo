@@ -82,6 +82,7 @@ class SynthVisStateEstDataGenerator(Dataset):
         :return: data[idx]  -- defines the behavior of the [] operator on the dataset
         """
         # returns a list of tuples for sequence number idx
+        print(type(self.data[idx][0][0]))
         return self.data[idx]
 
     def load_data(self, fn):

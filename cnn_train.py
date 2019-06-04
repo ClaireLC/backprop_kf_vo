@@ -7,7 +7,7 @@ import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from torch.autograd import Variable
 from torchvision import transforms, utils
-from kitti_dataset import KittiDataset, ToTensor, SubsetSampler
+from kitti_dataset import KittiDataset, SubsetSampler
 from models.feed_forward_cnn_model import FeedForwardCNN
 
 # Dataset specifications
@@ -169,8 +169,9 @@ def create_dataloaders(dataset, batch_size, sampler=None):
 def main():
   print("Creating dataloaders...")
   # Create dataset
-  train_dataset = KittiDataset(SEQ_DIR, POSES_DIR, OXTS_DIR, transform=transforms.Compose([ToTensor()]), mode="train")
-  val_dataset = KittiDataset(SEQ_DIR, POSES_DIR, OXTS_DIR, transform=transforms.Compose([ToTensor()]), mode="val")
+  seq_length = 100
+  train_dataset = KittiDataset(SEQ_DIR, POSES_DIR, OXTS_DIR, seq_length, mode="train")
+  val_dataset = KittiDataset(SEQ_DIR, POSES_DIR, OXTS_DIR, seq_length, mode="val")
   sampler = SubsetSampler(20)
 
   train_dataloader = create_dataloaders(train_dataset, batch_size)
