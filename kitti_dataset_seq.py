@@ -7,10 +7,12 @@ from torchvision import transforms, utils
 from skimage import io
 import matplotlib.pyplot as plt
 
+save_dir = "/mnt/disks/dataset/"
+
 class KittiDatasetSeq(Dataset):
   """
   KITTI VO trajectories with ground truth poses and forward/angular velocities
-  
+
     {
     "curr_img": current image,
     "diff_img": difference image,
@@ -39,19 +41,21 @@ class KittiDatasetSeq(Dataset):
     self.poses_dir = poses_dir
     self.seq_length = seq_length
 
+    self.transform = transforms.Compose([ToTensor()])
+
     # Load existing parsed data if possible. Otherwise create and store them.
     self.dataset = None
-    if mode == "infer" and os.path.isfile("inorder_dataset_seq.npy"):
+    if mode == "infer" and os.path.isfile(save_dir + "inorder_dataset_seq.npy"):
       print("Loading inorder_dataset_seq.npy ...")
-      self.dataset = np.load("inorder_dataset_seq.npy", allow_pickle=True)
+      self.dataset = np.load(save_dir + "inorder_dataset_seq.npy", allow_pickle=True)
       print("Done")
-    elif mode == "train" and os.path.isfile("train_dataset_seq.npy"):
+    elif mode == "train" and os.path.isfile(save_dir + "train_dataset_seq.npy"):
       print("Loading train_dataset_seq.npy")
-      self.dataset = np.load("train_dataset_seq.npy", allow_pickle=True)
+      self.dataset = np.load(save_dir + "train_dataset_seq.npy", allow_pickle=True)
       print("Done")
-    elif mode == "val" and os.path.isfile("val_dataset_seq.npy"):
+    elif mode == "val" and os.path.isfile(save_dir + "val_dataset_seq.npy"):
       print("Loading val_dataset_seq.npy")
-      self.dataset = np.load("val_dataset_seq.npy", allow_pickle=True)
+      self.dataset = np.load(save_dir + "val_dataset_seq.npy", allow_pickle=True)
       print("Done")
     else:
       print("Creating dataset... May take a while")
@@ -60,11 +64,11 @@ class KittiDatasetSeq(Dataset):
       self.put_data_into_sequence()
       print("Saving...")
       if mode == "train":
-        np.save("train_dataset_seq", np.asarray(self.dataset))
+        np.save(save_dir + "train_dataset_seq", np.asarray(self.dataset))
       elif mode == "val":
-        np.save("val_dataset_seq", np.asarray(self.dataset))
+        np.save(save_dir + "val_dataset_seq", np.asarray(self.dataset))
       elif mode == "infer":
-        np.save("inorder_dataset_seq", np.asarray(self.dataset))
+        np.save(save_dir + "inorder_dataset_seq", np.asarray(self.dataset))
       print("Done")
 
 
@@ -74,7 +78,7 @@ class KittiDatasetSeq(Dataset):
 
   def __getitem__(self, idx):
     # Return a list of tuples
-    return self.dataset[idx]
+    return self.transform(self.dataset[idx])
 
   def put_data_into_sequence(self):
     """
@@ -82,8 +86,6 @@ class KittiDatasetSeq(Dataset):
     The length of the list is specified by self.seq_length (eg 100)
     """
     data = []
-    assert(len(self.dataset) == sum([2 * self.seq_len[i] for i  in self.seq_len]))
-
     # Base index keeps track of which video sequence we're in, so index i below can always start with 0 for each video sequence
     base_idx = 0
     # Loop through each video sequence
@@ -91,7 +93,7 @@ class KittiDatasetSeq(Dataset):
       # Compute the number of frames in the video sequence. * 2 for two cameras
       num_frames = self.seq_len[vid_seq_num] * 2
       # Loop through the frames seq_length at a time
-      for i in range(0, num_frames, self.seq_length):
+      for i in tqdm(range(0, num_frames, self.seq_length)):
         if i + self.seq_length < num_frames:
           sequence_data = self.dataset[base_idx + i : base_idx + i + self.seq_length]
           sequence_data_formated = []
@@ -102,6 +104,7 @@ class KittiDatasetSeq(Dataset):
 
           data.append(sequence_data_formated)
       base_idx += num_frames
+      break
 
     self.dataset = data
 
@@ -134,7 +137,7 @@ class KittiDatasetSeq(Dataset):
     ang_vel = velocity[1]
     state = (x, y, theta, for_vel, ang_vel)
 
-    return (compos_image, state, time)
+    return (compos_image, state, cur_time)
 
 
   def process_dataset(self, mode):
@@ -179,7 +182,7 @@ class KittiDatasetSeq(Dataset):
         velocity = self.get_velocity(seq_num_str, frame_num)
         # Get pose
         x, y, theta = self.get_groudtruth_poses(seq_num_str, frame_num)
-        # Get current time 
+        # Get current time
         cur_time = self.get_timestamp(seq_num_str, frame_num)
 
         formated_dataset.append((curr_im_path, diff_im_path, velocity, x, y, theta, cur_time, seq_num_str))
@@ -222,7 +225,7 @@ class KittiDatasetSeq(Dataset):
 
   def init_dataset(self):
     """
-    Helper for create_data_tuples. 
+    Helper for create_data_tuples.
     """
     # Generate train or validation set
     for key, val in self.seq_len.items():
@@ -313,6 +316,9 @@ class KittiDatasetSeq(Dataset):
     return np.asarray([for_vel, ang_vel])
 
 
+
+
+
 class SubsetSampler(Sampler):
   def __init__(self, mask):
     self.mask = mask
@@ -322,6 +328,7 @@ class SubsetSampler(Sampler):
 
   def __len__(self):
     return self.mask
+
 
 class SequenceSampler(Sampler):
   """
@@ -365,18 +372,23 @@ class SequenceSampler(Sampler):
     return self.end_ind - self.start_ind + 1
 
 def main():
-  seq_dir = "/mnt/disks/dataset/dataset_post/sequences/"
-  poses_dir = "/mnt/disks/dataset/dataset/poses/"
-  oxts_dir = "/mnt/disks/dataset/dataset_post/oxts/"
-  dataset_1 = KittiDataset(seq_dir, poses_dir, oxts_dir, transform=transforms.Compose([ToTensor()]), mode="train")
-  #dataset_2 = KittiDataset(seq_dir, poses_dir, oxts_dir, transform=transforms.Compose([ToTensor()]), train=False)
-  #print(len(dataset_1), len(dataset_2))
+  from torch.utils.data import Dataset, DataLoader
+  batch_size = 2
 
-  ##sample = dataset_1[20601-1]
-  #sample = dataset_1[21140-1]
-  sample = dataset_1[0]
-  print(sample)
-  #print(sample["curr_time"])
+  seq_dir = "/mnt/disks/dataset/dataset_post/sequences/"
+  poses_dir = "/mnt/disks/dataset/dataset_post/poses/"
+  oxts_dir = "/mnt/disks/dataset/dataset_post/oxts/"
+
+  dataset = KittiDatasetSeq(seq_dir, poses_dir, oxts_dir, mode="train")
+
+  dataloader = DataLoader(dataset = dataset, batch_size = batch_size)
+
+  for i, minibatch in enumerate(dataloader):
+      print(len(minibatch))
+      print(type(minibatch[0]))
+      print(minibatch[0][0].shape)
+      print(len(minibatch[0][1]))
+      break
 
 
 if __name__ == "__main__":
