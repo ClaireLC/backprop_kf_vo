@@ -7,13 +7,14 @@ import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from torch.autograd import Variable
 from torchvision import transforms, utils
-from kitti_dataset import KittiDataset, SubsetSampler, ToTensor
+from kitti_dataset import KittiDataset, SubsetSampler
 from models.feed_forward_cnn_model import FeedForwardCNN
 
 # Dataset specifications
 SEQ_DIR = "/mnt/disks/dataset/dataset_post/sequences/"
 POSES_DIR = "/mnt/disks/dataset/dataset_post/poses/"
 OXTS_DIR = "/mnt/disks/dataset/dataset_post/oxts/"
+SAVE_DIR = "/mnt/disks/dataset/"
 
 # Device specification
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -21,6 +22,12 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # Global parameters
 batch_size = 50
 epochs = 100
+
+seq_length = 100
+minibatch_size = 4
+
+learning_rates = [1e-3, 1e-4]
+
 
 def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, model_id=None,
   train_dataloader=None, val_dataloader=None):
@@ -169,13 +176,13 @@ def create_dataloaders(dataset, batch_size, sampler=None):
 def main():
   print("Creating dataloaders...")
   # Create dataset
-  train_dataset = KittiDataset(SEQ_DIR, POSES_DIR, OXTS_DIR, transform=transforms.Compose([ToTensor()]), mode="train")
-  val_dataset = KittiDataset(SEQ_DIR, POSES_DIR, OXTS_DIR, transform=transforms.Compose([ToTensor()]), mode="val")
-  sampler = SubsetSampler(20)
+  train_dataset = KittiDatasetSeq(SEQ_DIR, POSES_DIR, OXTS_DIR, seq_length, mode="train")
+  val_dataset = KittiDatasetSeq(SEQ_DIR, POSES_DIR, OXTS_DIR, seq_length, mode="val")
+  #sampler = SubsetSampler(20)
 
   train_dataloader = create_dataloaders(train_dataset, batch_size)
   val_dataloader = create_dataloaders(val_dataset, batch_size)
-  dataloader_sampler = create_dataloaders(train_dataset, batch_size, sampler)
+  #dataloader_sampler = create_dataloaders(train_dataset, batch_size, sampler)
   print("Done.")
 
   # Construct feed forward CNN model
@@ -186,7 +193,7 @@ def main():
   # Construct loss function and optimizer
   loss_function = torch.nn.MSELoss(reduction='sum')
 
-  learning_rates = [1e-3, 1e-4]
+ 
   for learning_rate in learning_rates:
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
     train_model(model, optimizer, loss_function, lr=learning_rate, starting_epoch=-1, train_dataloader=train_dataloader, val_dataloader=val_dataloader)
