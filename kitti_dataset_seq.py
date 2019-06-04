@@ -104,7 +104,6 @@ class KittiDatasetSeq(Dataset):
 
           data.append(sequence_data_formated)
       base_idx += num_frames
-      break
 
     self.dataset = data
 
@@ -322,7 +321,7 @@ class ToTensor(object):
   def __call__(self, sample):
     result = []
     for compos_image, state, cur_time in sample:
-      result.append((torch.from_numpy(compos_image), torch.from_numpy(state), torch.from_numpy(cur_time)))
+      result.append((torch.from_numpy(compos_image), state, cur_time))
     return result
 
 
@@ -391,9 +390,16 @@ def main():
   dataloader = DataLoader(dataset = dataset, batch_size = batch_size)
 
   for i, minibatch in enumerate(dataloader):
+      # 100 sequences
       print(len(minibatch))
-      print(type(minibatch[0]))
+
+      # List of 3, [img, state, time]
+      print(len(minibatch[0]))
+
+      # (2, 3, 100, 150) 2 is from batch size
       print(minibatch[0][0].shape)
+
+      # 5, [x, y, theta, v_for, v_ang]
       print(len(minibatch[0][1]))
       break
 
