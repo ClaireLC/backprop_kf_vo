@@ -396,11 +396,15 @@ def main():
       # List of 3, [img, state, time]
       print(len(minibatch[0]))
 
-      # (2, 3, 100, 150) 2 is from batch size
+      # (2, 3, 100, 150) 2 is from batch size -> image
       print(minibatch[0][0].shape)
 
-      # 5, [x, y, theta, v_for, v_ang]
+      # 5, [x, y, theta, v_for, v_ang] -> state
       print(len(minibatch[0][1]))
+
+      # 2, [t1, t2] length batch size -> time
+      print(len(minibatch[0][2]))
+
       break
 
 

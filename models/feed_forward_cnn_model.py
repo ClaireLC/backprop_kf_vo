@@ -134,5 +134,6 @@ class FeedForwardCNN(nn.Module):
       )
 
   def forward(self,x):
+    # x: (N, 3, self.image_size, self.image_size) tensor
     y_pred = self.model(x)
     return y_pred

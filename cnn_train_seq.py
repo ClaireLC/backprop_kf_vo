@@ -77,14 +77,30 @@ def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, mod
 
     for i_batch, sample_batched in enumerate(train_dataloader):
         # Format data
-        x = torch.cat((sample_batched["curr_im"], sample_batched["diff_im"]), 1).type('torch.FloatTensor').to(device)
-        y_actual = sample_batched["vel"].type('torch.FloatTensor').to(device)
+        # (T, N, 3, H, W)
+        images = torch.stack([sample_batched[ii][0] for ii in range(len(sample_batched))]).float().to(device)
+        # (N, 6)
+        # make the column order (velocities, pose, time)
+        μ0s = torch.cat([sample_batched[0][1][:, 3:5], sample_batched[0][1][:, 0:3], sample_batched[0][2]], 1).float().to(device) 
+        # (T, N, 3)
+        positions = torch.stack([sample_batched[ii][1][:, 0:3] for ii in range(len(sample_batched))]).float().to(device) #[x, y, theta] stacked
+
+        # Reformat images so everything can be processed in parallel by utilizing batch size 
+        T, N, H, W =  images.shape[0], images.shape[1], images.shape[3], images.shape[4]
+        no_seq_images = images.view(T * N, 3, H, W)
 
         # Forward pass
-        y_prediction = model(x)
+        # output (T * N, dim_output)
+        vel_L_prediction = CNNModel(no_seq_images)
+
+        # Decompress the results into original images format
+        z_and_L_hat_list = vel_L_prediction.view(T, N, vel_L_prediction.shape[1])
+
+        # Pass through KF
+        pose_prediction = KFModel(z_and_L_hat_list, μ0s)
 
         # Compute loss
-        loss = loss_function(y_prediction, y_actual)
+        loss = loss_function(pose_prediction, positions)
 
         # Backward pass()
         optimizer.zero_grad()
@@ -186,16 +202,21 @@ def main():
   print("Done.")
 
   # Construct feed forward CNN model
-  model = FeedForwardCNN(image_channels=6, image_dims=np.array((50, 150)), z_dim=2, output_covariance=False, batch_size=batch_size)
-  model = model.to(device)  # move model to speicified device
-  print(model)
+  CNNModel = FeedForwardCNN(image_channels=6, image_dims=np.array((50, 150)), z_dim=2, output_covariance=True, batch_size=batch_size).to(device)
+
+  KFModel = KalmanFilter(backpropkf_dataset.k,
+                      backpropkf_dataset.b,
+                      backpropkf_dataset.m,
+                      backpropkf_dataset.dt,
+                      device,
+                      ).to(device)
 
   # Construct loss function and optimizer
   loss_function = torch.nn.MSELoss(reduction='sum')
 
  
   for learning_rate in learning_rates:
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
+    optimizer = torch.optim.Adam(list(CNNModel.parameters()) + list(KFModel.parameters())), lr=learning_rate, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
     train_model(model, optimizer, loss_function, lr=learning_rate, starting_epoch=-1, train_dataloader=train_dataloader, val_dataloader=val_dataloader)
 
 
