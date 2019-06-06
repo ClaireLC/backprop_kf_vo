@@ -65,47 +65,39 @@ class KalmanFilter(nn.Module):
     N = μ.shape[0]
 
     # Parse μ into its columns
-    x     = μ[:,0].cpu().detach().numpy() # (N,)
-    y     = μ[:,1].cpu().detach().numpy() # (N,)
-    theta = μ[:,2].cpu().detach().numpy() # (N,)
-    v     = μ[:,3].cpu().detach().numpy() #(N,)
-    dt    = dt.cpu().detach().numpy()
+    x     = μ[:,0] # (N,)
+    y     = μ[:,1] # (N,)
+    theta = μ[:,2] # (N,)
+    v     = μ[:,3] #(N,)
 
-    A = np.zeros((N,5,5))
-    A[:,0,2] = -1 * v * np.sin(theta) * dt
-    A[:,0,3] = np.cos(theta) * dt
-    A[:,1,2] = v * np.cos(theta) * dt
-    A[:,1,3] = np.sin(theta) * dt
+    A = torch.zeros((N,5,5)).to(self.device)
+    A[:,0,2] = -1 * v * torch.sin(theta) * dt
+    A[:,0,3] = torch.cos(theta) * dt
+    A[:,1,2] = v * torch.cos(theta) * dt
+    A[:,1,3] = torch.sin(theta) * dt
     A[:,2,4] = dt
 
-    A_torch = torch.from_numpy(A).to(self.device)
-    A_torch.requires_grad = False
-
-    return A_torch
+    return A
 
   def update_mu(self, μ, dt):
     # Extract batch size from μ
     N = μ.shape[0]
 
     # Parse μ into its columns
-    x     = μ[:,0].cpu().detach().numpy() # (N,)
-    y     = μ[:,1].cpu().detach().numpy() # (N,)
-    theta = μ[:,2].cpu().detach().numpy() # (N,)
-    v     = μ[:,3].cpu().detach().numpy() #(N,)
-    omega = μ[:,4].cpu().detach().numpy() # (N,)
-    dt    = dt.cpu().detach().numpy()
+    x     = μ[:,0] # (N,)
+    y     = μ[:,1] # (N,)
+    theta = μ[:,2] # (N,)
+    v     = μ[:,3] #(N,)
+    omega = μ[:,4] # (N,)
 
-    mu_next = np.zeros((N,5))
-    mu_next[:,0] = v * dt * np.cos(theta) + x
-    mu_next[:,1] = v * dt * np.sin(theta) + y
+    mu_next = torch.zeros((N,5)).to(self.device)
+    mu_next[:,0] = v * dt * torch.cos(theta) + x
+    mu_next[:,1] = v * dt * torch.sin(theta) + y
     mu_next[:,2] = theta + omega * dt
     mu_next[:,3] = v
     mu_next[:,4] = omega
-    
-    mu_next_torch = torch.from_numpy(mu_next).to(self.device)
-    mu_next_torch.requires_grad = False
 
-    return mu_next_torch
+    return mu_next
 
   def process_L_hat_single(self, L_hat_single):
     # L_hat_single: (3, ) tensor
@@ -149,10 +141,10 @@ class KalmanFilter(nn.Module):
     A = self.A_calc(μ_input, dt)
 
     # mu is (N, 5, 1)
-    μ_predicted = self.update_mu(μ_input, dt).unsqueeze(-1).float()
+    μ_predicted = self.update_mu(μ_input, dt).unsqueeze(-1)
 
     # (N, 5, 5) + (5, 5) = (N, 5, 5) tensor
-    Σ_predicted = A.float() @ Σ_input.float() @ A.permute(0, 2, 1).float() + self.Q
+    Σ_predicted = A @ Σ_input @ A.permute(0, 2, 1) + self.Q
     
     R = self.process_L_hat_batch(L_hat) # (N, 2, 2) tensor
     
