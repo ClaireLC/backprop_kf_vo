@@ -22,12 +22,53 @@ SAVE_DIR = "/mnt/disks/dataset/"
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Global parameters
-batch_size = 7
+batch_size = 20
 epochs = 100
 
 seq_length = 100
 
 learning_rates = [1e-3, 1e-4]
+
+
+def predict(CNNModel, KFModel, sample_batched, loss_function):
+  """
+  Takes in the models and the batched sample
+  Returns the loss, and positions, and pose predictions
+  """
+  # Sample dimensions (T, 3, N, 6, 50, 150)
+  # 3 because each sample is a tuple (image, state, time)
+  # Format data
+  # (T, N, 6, 50, 150)
+  images = torch.stack([sample_batched[ii][0] for ii in range(len(sample_batched))]).float().to(device)
+
+  # make the column order (velocities, pose)
+  # (N, 5)
+  μ0s = torch.cat([torch.stack(sample_batched[0][1][3:5],1), torch.stack(sample_batched[0][1][0:3],1)], 1).float().to(device) 
+
+  # (T, N, 3)
+  positions = torch.stack([torch.stack(sample_batched[ii][1][0:3],1) for ii in range(len(sample_batched))]).float().to(device) #[x, y, theta] stacked
+
+  # (T, N,) sequence timestamps
+  times = torch.stack([sample_batched[ii][2] for ii in range(len(sample_batched))]).float().to(device)
+
+  # Reshape images so everything can be processed in parallel by utilizing batch size 
+  T, N, H, W =  images.shape[0], images.shape[1], images.shape[3], images.shape[4]
+  no_seq_images = images.view(T * N, 6, H, W)
+
+  # Forward pass
+  # output (T * N, dim_output)
+  vel_L_prediction = CNNModel(no_seq_images)
+
+  # Decompress the results into original images format
+  z_and_L_hat_list = vel_L_prediction.view(T, N, vel_L_prediction.shape[1])
+
+  # Pass through KF
+  pose_prediction = KFModel(z_and_L_hat_list, μ0s, times)
+
+  # Compute loss
+  loss = loss_function(pose_prediction, positions)
+  
+  return loss, positions, pose_prediction
 
 
 def train_model(CNNModel, KFModel, optimizer, loss_function, lr=1e-4, starting_epoch=-1, model_id=None,
@@ -74,40 +115,11 @@ def train_model(CNNModel, KFModel, optimizer, loss_function, lr=1e-4, starting_e
   for epoch in range(starting_epoch + 1, epochs):
     # Set model to training model
     CNNModel.train()
+    KFModel.train()
 
     for i_batch, sample_batched in enumerate(train_dataloader):
-        # Sample dimensions (T, 3, N, 6, 50, 150)
-        # 3 because each sample is a tuple (image, state, time)
-        # Format data
-        # (T, N, 6, 50, 150)
-        images = torch.stack([sample_batched[ii][0] for ii in range(len(sample_batched))]).float().to(device)
-
-        # make the column order (velocities, pose)
-        # (N, 5)
-        μ0s = torch.cat([torch.stack(sample_batched[0][1][3:5],1), torch.stack(sample_batched[0][1][0:3],1)], 1).float().to(device) 
-
-        # (T, N, 3)
-        positions = torch.stack([torch.stack(sample_batched[ii][1][0:3],1) for ii in range(len(sample_batched))]).float().to(device) #[x, y, theta] stacked
-
-        # (T, N,) sequence timestamps
-        times = torch.stack([sample_batched[ii][2] for ii in range(len(sample_batched))]).float().to(device)
-
-        # Reshape images so everything can be processed in parallel by utilizing batch size 
-        T, N, H, W =  images.shape[0], images.shape[1], images.shape[3], images.shape[4]
-        no_seq_images = images.view(T * N, 6, H, W)
-
-        # Forward pass
-        # output (T * N, dim_output)
-        vel_L_prediction = CNNModel(no_seq_images)
-
-        # Decompress the results into original images format
-        z_and_L_hat_list = vel_L_prediction.view(T, N, vel_L_prediction.shape[1])
-
-        # Pass through KF
-        pose_prediction = KFModel(z_and_L_hat_list, μ0s, times)
-
         # Compute loss
-        loss = loss_function(pose_prediction, positions)
+        loss, positions,pose_prediction = predict(CNNModel, KFModel, sample_batched, loss_function)
 
         # Backward pass()
         optimizer.zero_grad()
@@ -127,7 +139,7 @@ def train_model(CNNModel, KFModel, optimizer, loss_function, lr=1e-4, starting_e
               loss_save.write(out_text)
 
     # End of epoch
-    val_loss = validation_loss(model, val_dataloader, loss_function)
+    val_loss = validation_loss(CNNModel, KFModel, val_dataloader, loss_function)
     print()
     print('epoch {}, validation loss = {}'.format(epoch, val_loss))
     print()
@@ -140,7 +152,8 @@ def train_model(CNNModel, KFModel, optimizer, loss_function, lr=1e-4, starting_e
       model_name = 'log/' + start_time_str + '_' + lr_str  + '_bestloss_feed_forward.tar'
       torch.save({
                   "epoch": epoch,
-                  "model_state_dict": model.state_dict(),
+                  "cnn_model_state_dict": CNNModel.state_dict(),
+                  "kf_model_state_dict": KFModel.state_dict(),
                   "optimizer_state_dict": optimizer.state_dict(),
                   "loss": loss.item(),
                   "batch_size": batch_size,
@@ -151,7 +164,8 @@ def train_model(CNNModel, KFModel, optimizer, loss_function, lr=1e-4, starting_e
   model_name = 'log/' + start_time_str + '_' + lr_str +  '_end_feed_forward.tar'
   torch.save({
               "epoch": epochs, # the end
-              "model_state_dict": model.state_dict(),
+              "cnn_model_state_dict": CNNModel.state_dict(),
+              "kf_model_state_dict": KFModel.state_dict(),
               "optimizer_state_dict": optimizer.state_dict(),
               "loss": loss.item(),
               "batch_size": batch_size,
@@ -159,21 +173,15 @@ def train_model(CNNModel, KFModel, optimizer, loss_function, lr=1e-4, starting_e
   print('saved model: '+ model_name)
 
 
-def validation_loss(model, val_dataloader, loss_function):
+def validation_loss(CNNModel, KFModel, val_dataloader, loss_function):
   with torch.no_grad():
-    model.eval()
+    CNNModel.eval()
+    KFModel.eval()
     total_loss = 0.0
     num_batches = 0
     for i_batch, sample_batched in enumerate(val_dataloader):
         num_batches += 1
-        # Format data
-        x = torch.cat((sample_batched["curr_im"], sample_batched["diff_im"]), 1).type('torch.FloatTensor').to(device)
-        y_actual = sample_batched["vel"].type('torch.FloatTensor').to(device)
-
-        # Forward pass
-        y_prediction = model(x)
-        # Compute loss
-        loss = loss_function(y_prediction, y_actual).item()
+        loss, positions, pose_prediction = predict(CNNModel, KFModel, sample_batched, loss_function)
         total_loss += loss
 
   # Return the average validation loss across all batches
