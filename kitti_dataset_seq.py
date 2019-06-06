@@ -36,6 +36,7 @@ class KittiDatasetSeq(Dataset):
       train: when True, creates training set, else creates validation set
     """
 
+    self.mode = mode
     self.seq_dir = seq_dir
     self.oxts_dir = oxts_dir
     self.poses_dir = poses_dir
@@ -59,7 +60,7 @@ class KittiDatasetSeq(Dataset):
       print("Done")
     else:
       print("Creating dataset... May take a while")
-      self.process_dataset(mode)
+      self.process_dataset()
       print("Putting data into sequence...")
       self.put_data_into_sequence()
       print("Saving...")
@@ -107,6 +108,16 @@ class KittiDatasetSeq(Dataset):
 
     self.dataset = data
 
+    if self.mode != "infer":
+      np.random.shuffle(self.dataset)
+
+    # Split the data that's created or loaded
+    train_dataset, val_dataset = np.split(self.dataset, [int(0.9 * len(self.dataset))])
+    if self.mode == "train":
+      self.dataset = train_dataset
+    elif self.mode == "val":
+      self.dataset = val_dataset
+
 
   def format_datapoint(self, datapoint):
     """
@@ -131,7 +142,7 @@ class KittiDatasetSeq(Dataset):
     diff_im = diff_im.transpose((2,0,1))
 
     # Combine the images together by putting them side by side
-    compos_image = np.concatenate((curr_im, diff_im), 1)
+    compos_image = np.concatenate((curr_im, diff_im), 0)
     for_vel = velocity[0]
     ang_vel = velocity[1]
     state = (x, y, theta, for_vel, ang_vel)
@@ -139,7 +150,7 @@ class KittiDatasetSeq(Dataset):
     return (compos_image, state, cur_time)
 
 
-  def process_dataset(self, mode):
+  def process_dataset(self):
     """
     Creates a list of tuples. Each tuple corresponds to a data sample and contains information
     that need to be retrieved by __getitem__
@@ -164,7 +175,7 @@ class KittiDatasetSeq(Dataset):
       }
 
     # Update self.dataset to contain list of (seq_num, frame_num, cam_num)
-    self.create_data_tuples(mode)
+    self.create_data_tuples()
 
     # Clean up the data inside dataset
     formated_dataset = []
@@ -189,7 +200,7 @@ class KittiDatasetSeq(Dataset):
     self.dataset = formated_dataset
 
 
-  def create_data_tuples(self, mode):
+  def create_data_tuples(self):
     """
     Processes or loads all the data according to its sequence number, frame number and camera number
     and stores this information in a tuple of three.
@@ -199,27 +210,11 @@ class KittiDatasetSeq(Dataset):
     # Store / load the train val dataset
     self.dataset = []
 
-    if mode == "infer":
-      if os.path.isfile("inorder_dataset.npy"):
-        self.dataset = np.load("inorder_dataset.npy", )
-      else:
-        self.init_dataset()
-        np.save("inorder_dataset", self.dataset)
+    if os.path.isfile("inorder_dataset.npy"):
+      self.dataset = np.load("inorder_dataset.npy", allow_pickle=True)
     else:
-      # If split data exists
-      if os.path.isfile("train_val_split.npy"):
-        self.dataset = np.load("train_val_split.npy")
-      else:
-        self.init_dataset()
-        np.random.shuffle(self.dataset)
-        np.save("train_val_split", self.dataset)
-
-      # Split the data that's created or loaded
-      train_dataset, val_dataset = np.split(self.dataset, [int(0.9 * len(self.dataset))])
-      if mode == "train":
-        self.dataset = train_dataset
-      elif mode == "val":
-        self.dataset = val_dataset
+      self.init_dataset()
+      np.save("inorder_dataset", self.dataset)
 
 
   def init_dataset(self):
@@ -391,22 +386,22 @@ def main():
   print(len(dataloader))
   for i, minibatch in enumerate(dataloader):
       # 100 sequences
-      print(len(minibatch))
+      print(i, len(minibatch))
 
       # List of 3, [img, state, time]
-      print(len(minibatch[0]))
+      #print(len(minibatch[0]))
 
       # (2, 3, 100, 150) 2 is from batch size -> image
-      print(minibatch[0][0].shape)
+      #print(minibatch[0][0].shape)
 
       # 5, [x, y, theta, v_for, v_ang] -> state
-      print(len(minibatch[0][1]))
+      #print(len(minibatch[0][1]))
 
       # 2, [t1, t2] length batch size -> time
-      print(len(minibatch[0][2]))
+      #print(len(minibatch[0][2]))
 
-      break
-
+      if len(minibatch) == 0:
+        print("Empty minibatch found")
 
 if __name__ == "__main__":
   main()
