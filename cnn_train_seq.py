@@ -8,7 +8,9 @@ from torch.utils.data import Dataset, DataLoader
 from torch.autograd import Variable
 from torchvision import transforms, utils
 from kitti_dataset import KittiDataset, SubsetSampler
+from kitti_dataset_seq import KittiDatasetSeq
 from models.feed_forward_cnn_model import FeedForwardCNN
+from models.kalmanfilter_model import KalmanFilter
 
 # Dataset specifications
 SEQ_DIR = "/mnt/disks/dataset/dataset_post/sequences/"
@@ -20,16 +22,15 @@ SAVE_DIR = "/mnt/disks/dataset/"
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Global parameters
-batch_size = 50
+batch_size = 7
 epochs = 100
 
 seq_length = 100
-minibatch_size = 4
 
 learning_rates = [1e-3, 1e-4]
 
 
-def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, model_id=None,
+def train_model(CNNModel, KFModel, optimizer, loss_function, lr=1e-4, starting_epoch=-1, model_id=None,
   train_dataloader=None, val_dataloader=None):
   """
     starting_epoch: the epoch to start training. If -1, this means we
@@ -60,7 +61,6 @@ def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, mod
     loss = checkpoint["loss"]
     print(epoch, loss)
 
-
   # Training
   losses = []
   errors = []
@@ -73,21 +73,28 @@ def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, mod
 
   for epoch in range(starting_epoch + 1, epochs):
     # Set model to training model
-    model.train()
+    CNNModel.train()
 
     for i_batch, sample_batched in enumerate(train_dataloader):
+        # Sample dimensions (T, 3, N, 6, 50, 150)
+        # 3 because each sample is a tuple (image, state, time)
         # Format data
-        # (T, N, 3, H, W)
+        # (T, N, 6, 50, 150)
         images = torch.stack([sample_batched[ii][0] for ii in range(len(sample_batched))]).float().to(device)
-        # (N, 5)
-        # make the column order (velocities, pose)
-        μ0s = torch.cat([sample_batched[0][1][:, 3:5], sample_batched[0][1][:, 0:3]], 1).float().to(device) 
-        # (T, N, 3)
-        positions = torch.stack([sample_batched[ii][1][:, 0:3] for ii in range(len(sample_batched))]).float().to(device) #[x, y, theta] stacked
 
-        # Reformat images so everything can be processed in parallel by utilizing batch size 
+        # make the column order (velocities, pose)
+        # (N, 5)
+        μ0s = torch.cat([torch.stack(sample_batched[0][1][3:5],1), torch.stack(sample_batched[0][1][0:3],1)], 1).float().to(device) 
+
+        # (T, N, 3)
+        positions = torch.stack([torch.stack(sample_batched[ii][1][0:3],1) for ii in range(len(sample_batched))]).float().to(device) #[x, y, theta] stacked
+
+        # (T, N,) sequence timestamps
+        times = torch.stack([sample_batched[ii][2] for ii in range(len(sample_batched))]).float().to(device)
+
+        # Reshape images so everything can be processed in parallel by utilizing batch size 
         T, N, H, W =  images.shape[0], images.shape[1], images.shape[3], images.shape[4]
-        no_seq_images = images.view(T * N, 3, H, W)
+        no_seq_images = images.view(T * N, 6, H, W)
 
         # Forward pass
         # output (T * N, dim_output)
@@ -97,7 +104,7 @@ def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, mod
         z_and_L_hat_list = vel_L_prediction.view(T, N, vel_L_prediction.shape[1])
 
         # Pass through KF
-        pose_prediction = KFModel(z_and_L_hat_list, μ0s)
+        pose_prediction = KFModel(z_and_L_hat_list, μ0s, times)
 
         # Compute loss
         loss = loss_function(pose_prediction, positions)
@@ -111,7 +118,7 @@ def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, mod
         if i_batch % (len(train_dataloader) // 10) == 0:
             print('epoch {}/{}, iteration {}/{}, loss = {}'.format(epoch, (epochs-1), i_batch, len(train_dataloader) - 1, loss.item()))
             losses.append(loss.item())
-            current_error = torch.norm(y_prediction-y_actual)
+            current_error = torch.norm(positions-pose_prediction)
             errors.append(current_error)
 
             # Log info in loss_file
@@ -199,26 +206,22 @@ def main():
   train_dataloader = create_dataloaders(train_dataset, batch_size)
   val_dataloader = create_dataloaders(val_dataset, batch_size)
   #dataloader_sampler = create_dataloaders(train_dataset, batch_size, sampler)
-  print("Done.")
+  print("Done creating dataloaders.")
 
   # Construct feed forward CNN model
   CNNModel = FeedForwardCNN(image_channels=6, image_dims=np.array((50, 150)), z_dim=2, output_covariance=True, batch_size=batch_size).to(device)
 
-  KFModel = KalmanFilter(backpropkf_dataset.k,
-                      backpropkf_dataset.b,
-                      backpropkf_dataset.m,
-                      backpropkf_dataset.dt,
-                      device,
-                      ).to(device)
+  KFModel = KalmanFilter(device).to(device)
+
+  print("CNN Model:")
+  print(CNNModel)
 
   # Construct loss function and optimizer
   loss_function = torch.nn.MSELoss(reduction='sum')
-
  
   for learning_rate in learning_rates:
-    optimizer = torch.optim.Adam(list(CNNModel.parameters()) + list(KFModel.parameters())), lr=learning_rate, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
-    train_model(model, optimizer, loss_function, lr=learning_rate, starting_epoch=-1, train_dataloader=train_dataloader, val_dataloader=val_dataloader)
-
+    optimizer = torch.optim.Adam(list(CNNModel.parameters()) + list(KFModel.parameters()), lr=learning_rate, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
+    train_model(CNNModel, KFModel, optimizer, loss_function, lr=learning_rate, starting_epoch=-1, train_dataloader=train_dataloader, val_dataloader=val_dataloader)
 
 if __name__ == "__main__":
   main()
