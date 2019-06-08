@@ -371,6 +371,13 @@ def main():
   dataset_3 = KittiDataset(seq_dir, poses_dir, oxts_dir, transform=transforms.Compose([ToTensor()]), mode="infer")
   #print(len(dataset_1), len(dataset_2))
 
+  dataset_1.hydrate_dataset()
+  np.save("train_dataset_new", np.asarray(dataset_1.dataset))
+
+  #np.save("val_dataset", np.asarray(self.dataset))
+
+  #np.save("inorder_dataset", np.asarray(self.dataset))
+
   ##sample = dataset_1[20601-1]
   #sample = dataset_1[21140-1]
   #sample = dataset_1[0]
