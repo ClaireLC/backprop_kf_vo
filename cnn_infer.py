@@ -18,9 +18,16 @@ from matplotlib import pyplot as plt
 from models.feed_forward_cnn_model import FeedForwardCNN
 from kitti_dataset import KittiDataset, ToTensor, SequenceSampler
 
+parser = argparse.ArgumentParser()
+parser.add_argument('--checkpoint', dest='checkpoint', default='', help='model checkpoint')
+parser.add_argument('--save', dest='save', default='./cnn_results/', help='save location')
+parser.add_argument("--traj_num", dest='traj_num', default='0', help="Trajectory number")
+  
+args = parser.parse_args()
+
 # Device specification
-device = torch.device('cuda')
-#device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+#device = torch.device('cuda')
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Setup
 image_dims = np.array((50, 150))
@@ -41,7 +48,7 @@ def infer(model_path, sequence_num, camera_num):
   print('Loading model from: ',model_path)
   model = FeedForwardCNN(image_channels=6, image_dims=np.array((50, 150)), z_dim=2, output_covariance=False, batch_size=1)
   model = model.to(device=device)  # move model to speicified device
-  checkpoint = torch.load(model_path)
+  checkpoint = torch.load(model_path, map_location=device)
   model.load_state_dict(checkpoint['model_state_dict'])
   # Set model to eval mode
   model.eval()
@@ -64,7 +71,7 @@ def infer(model_path, sequence_num, camera_num):
                               )
 
   # Write csv header
-  results_save_path = "./cnn_results/kitti_{}.txt".format(sequence_num)
+  results_save_path = args.save + "/kitti_{}.txt".format(sequence_num)
   with open(results_save_path, mode="a+") as csv_id:
     writer = csv.writer(csv_id, delimiter=",")
     writer.writerow(["predicted forward vel", "predicted angular vel"])
@@ -106,13 +113,10 @@ def infer(model_path, sequence_num, camera_num):
   print('Testing std  RMS error: {}'.format(np.std(np.sqrt(losses))))
 
 def main():
-  parser = argparse.ArgumentParser()
-  parser.add_argument("--traj_num", help="Trajectory number")
-  args = parser.parse_args()
   traj_num = args.traj_num
-
   print("Running inference on KITTI trajectory {}".format(traj_num))
-  model_path = "./log/cnnForwardPass/2019-05-24_11_24_1.00e-04_bestloss_feed_forward.tar"
+  
+  model_path = args.checkpoint
   camera_num = 2
 
   infer(model_path, int(traj_num), camera_num)
