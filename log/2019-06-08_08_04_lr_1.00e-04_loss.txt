@@ -1,0 +1,2 @@
+epoch, iteration, loss, error
+0, 0, 6320904.0, 2514.140869140625
