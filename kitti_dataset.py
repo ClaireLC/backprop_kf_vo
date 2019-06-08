@@ -6,6 +6,7 @@ from torch.utils.data import Dataset, DataLoader, Sampler
 from torchvision import transforms, utils
 from skimage import io
 import matplotlib.pyplot as plt
+import time
 
 class KittiDataset(Dataset):
   """
@@ -34,16 +35,27 @@ class KittiDataset(Dataset):
     self.poses_dir = poses_dir
     self.transform = transform
 
+    start_time = time.time()
     # Load existing parsed data if possible. Otherwise create and store them.
     self.dataset = None
     if mode == "infer" and os.path.isfile("inorder_dataset.npy"):
+      print("Loading inorder_dataset.npy, expected wait time: ", 0)
       self.dataset = np.load("inorder_dataset.npy", allow_pickle=True)
+      print("Done, it took time: ", time.time() - start_time)
+
     elif mode == "train" and os.path.isfile("train_dataset.npy"):
+      print("Loading train_dataset.npy, expected wait time: ", 0)
       self.dataset = np.load("train_dataset.npy", allow_pickle=True)
+      print("Done, it took time: ", time.time() - start_time)
+
     elif mode == "val" and os.path.isfile("val_dataset.npy"):
+      print("Loading val_dataset.npy, expected wait time: ", 0)
       self.dataset = np.load("val_dataset.npy", allow_pickle=True)
+      print("Done, it took time: ", time.time() - start_time)
+
     else:
       self.process_dataset(mode)
+      self.hydrate_dataset()
       if mode == "train":
         np.save("train_dataset", np.asarray(self.dataset))
       elif mode == "val":
@@ -58,7 +70,35 @@ class KittiDataset(Dataset):
 
   def __getitem__(self, idx):
     # Directly index into dataset list to get data sample information
-    curr_im_path, diff_im_path, velocity, seq_num_str = self.dataset[idx]
+    return self.dataset[idx]
+
+
+  def hydrate_dataset(self):
+    """
+    Takes in a processed dataset, a list of tuples (return type of process_dataset)
+    Returns a list that contains all the images and relevant data in the desired format
+    __getitem__ can directly index into this list.
+    """
+    data = []
+    for datapoint in self.dataset:
+      data.append(self.format_datapoint(datapoint))
+    self.dataset = data
+
+
+  def format_datapoint(self, datapoint):
+    """
+    Takes in a datapoint which is currently formated as
+    datapoint = curr_im_path, diff_im_path, velocity, seq_num_str
+
+    Output a datapoint in the format of 
+    {
+      "curr_im": curr_im,
+      "diff_im": diff_im,
+      "vel": velocity,
+    }
+    And then this dict is put through self.tansform
+    """
+    curr_im_path, diff_im_path, velocity, seq_num_str = datapoint
 
     curr_im = io.imread(curr_im_path)
     diff_im = io.imread(diff_im_path)
@@ -81,13 +121,13 @@ class KittiDataset(Dataset):
     if self.transform:
       sample = self.transform(sample)
 
-    return sample
+    return sample 
 
 
   def process_dataset(self, mode):
     """
     Creates a list of tuples. Each tuple corresponds to a data sample and contains information
-    that need to be retrieved by __getitem__
+    that helps retrieve images and data
 
     The list is stored in self.dataset
     Tuple format: (curr_im_path, diff_im_path, velocity, seq_num_str)
@@ -327,13 +367,14 @@ def main():
   poses_dir = "/mnt/disks/dataset/dataset/poses/"
   oxts_dir = "/mnt/disks/dataset/dataset_post/oxts/"
   dataset_1 = KittiDataset(seq_dir, poses_dir, oxts_dir, transform=transforms.Compose([ToTensor()]), mode="train")
-  #dataset_2 = KittiDataset(seq_dir, poses_dir, oxts_dir, transform=transforms.Compose([ToTensor()]), train=False)
+  dataset_2 = KittiDataset(seq_dir, poses_dir, oxts_dir, transform=transforms.Compose([ToTensor()]), mode="val")
+  dataset_3 = KittiDataset(seq_dir, poses_dir, oxts_dir, transform=transforms.Compose([ToTensor()]), mode="infer")
   #print(len(dataset_1), len(dataset_2))
 
   ##sample = dataset_1[20601-1]
   #sample = dataset_1[21140-1]
-  sample = dataset_1[0]
-  print(sample)
+  #sample = dataset_1[0]
+  #print(sample)
   #print(sample["curr_time"])
 
 
