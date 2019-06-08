@@ -18,6 +18,10 @@ POSES_DIR = "/mnt/disks/dataset/dataset_post/poses/"
 OXTS_DIR = "/mnt/disks/dataset/dataset_post/oxts/"
 SAVE_DIR = "/mnt/disks/dataset/"
 
+# Pretrained weights path
+CNN_DIR = "/home/clairech/backprop_kf_vo/log/cnnForwardPass/"
+CNN_NAME = "2019-05-24_11_24_1.00e-04_bestloss_feed_forward.tar"
+
 # Device specification
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -27,7 +31,8 @@ epochs = 100
 
 seq_length = 100
 
-learning_rates = [1e-3, 1e-4]
+#learning_rates = [1e-3, 1e-4]
+learning_rates = [1e-4]
 
 
 def predict(CNNModel, KFModel, sample_batched, loss_function):
@@ -37,16 +42,20 @@ def predict(CNNModel, KFModel, sample_batched, loss_function):
   """
   # Sample dimensions (T, 3, N, 6, 50, 150)
   # 3 because each sample is a tuple (image, state, time)
+
   # Format data
   # (T, N, 6, 50, 150)
   images = torch.stack([sample_batched[ii][0] for ii in range(len(sample_batched))]).float().to(device)
 
-  # make the column order (velocities, pose)
+  # make the column order (pose, velocities)
   # (N, 5)
-  μ0s = torch.cat([torch.stack(sample_batched[0][1][3:5],1), torch.stack(sample_batched[0][1][0:3],1)], 1).float().to(device) 
+  μ0s = torch.cat([torch.stack(sample_batched[0][1][0:3],1), torch.stack(sample_batched[0][1][3:5],1)], 1).float().to(device) 
 
   # (T, N, 3)
   positions = torch.stack([torch.stack(sample_batched[ii][1][0:3],1) for ii in range(len(sample_batched))]).float().to(device) #[x, y, theta] stacked
+
+  # (T, N, 2)
+  vels = torch.stack([torch.stack(sample_batched[ii][1][3:5],1) for ii in range(len(sample_batched))]).float().to(device) #[x, y, theta] stacked
 
   # (T, N,) sequence timestamps
   times = torch.stack([sample_batched[ii][2] for ii in range(len(sample_batched))]).float().to(device)
@@ -58,18 +67,28 @@ def predict(CNNModel, KFModel, sample_batched, loss_function):
   # Forward pass
   # output (T * N, dim_output)
   vel_L_prediction = CNNModel(no_seq_images)
+  
+  #print("CNN predictions {}".format(vel_L_prediction[0]))
+  #print("vels {}".format(vels[0][0]))
 
   # Decompress the results into original images format
   z_and_L_hat_list = vel_L_prediction.view(T, N, vel_L_prediction.shape[1])
 
   # Pass through KF
   pose_prediction = KFModel(z_and_L_hat_list, μ0s, times)
+  #print("pose prediction {}".format(pose_prediction[0][0]))
+  #print("pose prediction {}".format(pose_prediction[1][0]))
+  #print("pose prediction {}".format(pose_prediction[2][0]))
+  #print(pose_prediction.shape)
 
   # Compute loss
+  #print("position {}".format(positions[0][0]))
+  #print("position {}".format(positions[1][0]))
+  #print("position {}".format(positions[2][0]))
+  #print(positions.shape)
   loss = loss_function(pose_prediction, positions)
   
   return loss, positions, pose_prediction
-
 
 def train_model(CNNModel, KFModel, optimizer, loss_function, lr=1e-4, starting_epoch=-1, model_id=None,
   train_dataloader=None, val_dataloader=None):
@@ -92,15 +111,13 @@ def train_model(CNNModel, KFModel, optimizer, loss_function, lr=1e-4, starting_e
   loss_file = 'log/' + start_time_str + '_lr_' + lr_str + '_loss.txt'
   val_loss_file = 'log/' + start_time_str + '_lr_' + lr_str + '_val_loss.txt'
 
-  # If we are starting from a saved checkpoint epoch, load that checkpoint
+  # Load pre-trained feed forward CNN weights
+  print("Loading pretrained CNN weights from {}".format(CNN_NAME))
   if starting_epoch >= 0:
-    checkpoint_path = "log/" + start_time_str + "_" + str(starting_epoch) + "_feed_forward.tar"
+    checkpoint_path = CNN_DIR + CNN_NAME
     checkpoint = torch.load(checkpoint_path)
-    model.load_state_dict(checkpoint['model_state_dict'])
-    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-    epoch = checkpoint["epoch"]
-    loss = checkpoint["loss"]
-    print(epoch, loss)
+    CNNModel.load_state_dict(checkpoint['model_state_dict'])
+    #optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
 
   # Training
   losses = []
@@ -221,8 +238,8 @@ def main():
 
   KFModel = KalmanFilter(device).to(device)
 
-  print("CNN Model:")
-  print(CNNModel)
+  #print("CNN Model:")
+  #print(CNNModel)
 
   # Construct loss function and optimizer
   loss_function = torch.nn.MSELoss(reduction='sum')
