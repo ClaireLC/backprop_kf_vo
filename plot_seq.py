@@ -23,7 +23,7 @@ def plot_seq(dataset_type, traj_num):
         y.append(row[y_ind])
 
     # Get oxts data
-    oxts_dir = "./dataset/" + traj_name.zfill(2) + "/oxts/data/"
+    oxts_dir = "./dataset/" + traj_name.zfill(2) + "/data/"
     acc = []
     for i in range(len(x)):
       oxts_file_path = oxts_dir + str(i).zfill(10) + ".txt"
@@ -37,7 +37,7 @@ def plot_seq(dataset_type, traj_num):
     # Parse inferrence results
     x_vel_est = []
     theta_vel_est = []
-    est_path = "./cnn_results/" + traj_name.zfill(2) + "-results.txt"
+    est_path = "./cnn_results/piecewise_kf/" + "kitti_" + traj_name + ".txt"
     with open(est_path, "r") as fid:
       reader = csv.reader(fid, delimiter=",")
       next(reader)
