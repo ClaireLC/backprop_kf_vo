@@ -41,17 +41,17 @@ class KittiDataset(Dataset):
     # Load existing parsed data if possible. Otherwise create and store them.
     self.dataset = None
     if mode == "infer" and os.path.isfile(save_dir + "inorder_dataset.npy"):
-      print("Loading inorder_dataset.npy, expected wait time: {}s".format(20))
+      print("Loading inorder_dataset.npy, expected wait time: {}s".format(21))
       self.dataset = np.load(save_dir + "inorder_dataset.npy", allow_pickle=True)
       print("Done, it took time: ", time.time() - start_time)
 
     elif mode == "train" and os.path.isfile(save_dir + "train_dataset.npy"):
-      print("Loading train_dataset.npy, expected wait time: {}s".format(2))
+      print("Loading train_dataset.npy, expected wait time: {}s".format(20))
       self.dataset = np.load(save_dir + "train_dataset.npy", allow_pickle=True)
       print("Done, it took time: ", time.time() - start_time)
 
     elif mode == "val" and os.path.isfile(save_dir + "val_dataset.npy"):
-      print("Loading val_dataset.npy, expected wait time: {}s".format(21))
+      print("Loading val_dataset.npy, expected wait time: {}s".format(2))
       self.dataset = np.load(save_dir + "val_dataset.npy", allow_pickle=True)
       print("Done, it took time: ", time.time() - start_time)
 
