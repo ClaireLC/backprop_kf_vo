@@ -188,7 +188,7 @@ def main():
 
   learning_rates = [1e-3, 1e-4]
   for learning_rate in learning_rates:
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=0.1)
     train_model(model, optimizer, loss_function, lr=learning_rate, starting_epoch=-1, train_dataloader=train_dataloader, val_dataloader=val_dataloader)
 
 
