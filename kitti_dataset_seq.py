@@ -259,6 +259,9 @@ class KittiDatasetSeq(Dataset):
     else:
       theta = np.arccos(pose[0]) * -1
 
+    # Transpose theta to world frame
+    theta += np.pi/2
+
     return x, y, theta
 
 
