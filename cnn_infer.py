@@ -6,6 +6,7 @@ import time
 import random
 import csv
 import argparse
+import os
 from tqdm import tqdm
 import torch
 import torch.nn as nn
@@ -22,8 +23,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--checkpoint', dest='checkpoint', default='', help='model checkpoint')
 parser.add_argument('--save', dest='save', default='./cnn_results/', help='save location')
 parser.add_argument("--traj_num", dest='traj_num', default='0', help="Trajectory number")
-  
+
 args = parser.parse_args()
+os.makedirs(args.save, exist_ok=True)
 
 # Device specification
 #device = torch.device('cuda')
@@ -55,7 +57,7 @@ def infer(model_path, sequence_num, camera_num):
 
   # Construct loss function
   loss_function = torch.nn.MSELoss(reduction='sum')
-  
+
   # Create dataset
   dataset = KittiDataset(SEQ_DIR, POSES_DIR, OXTS_DIR, transform=transforms.Compose([ToTensor()]), mode="infer")
 
@@ -75,21 +77,21 @@ def infer(model_path, sequence_num, camera_num):
   with open(results_save_path, mode="a+") as csv_id:
     writer = csv.writer(csv_id, delimiter=",")
     writer.writerow(["predicted forward vel", "predicted angular vel"])
-  
+
   # Run inference for each sample in sequence
   losses = []
   errors = []
   start_time = time.time()
-  
+
   for i, sample in enumerate(tqdm(seq_dataloader)):
       # Format data
       x = torch.cat((sample["curr_im"], sample["diff_im"]), 1).type('torch.FloatTensor').to(device)
       y_actual = sample["vel"].type('torch.FloatTensor').to(device)
-  
+
       # Forward pass
       y_prediction = model(x)
       loss = loss_function(y_prediction, y_actual)
-  
+
       # Extract values from tensors
       y_prediction_array = y_prediction.data.cpu().numpy()[0]
 
@@ -106,7 +108,7 @@ def infer(model_path, sequence_num, camera_num):
       with open(results_save_path, mode="a+") as csv_id:
         writer = csv.writer(csv_id, delimiter=",")
         writer.writerow([y_prediction_array[0], y_prediction_array[1]])
-  
+
   # Finish up
   print('Elapsed time: {}'.format(time.time() - start_time))
   print('Testing mean RMS error: {}'.format(np.mean(np.sqrt(losses))))
@@ -115,7 +117,7 @@ def infer(model_path, sequence_num, camera_num):
 def main():
   traj_num = args.traj_num
   print("Running inference on KITTI trajectory {}".format(traj_num))
-  
+
   model_path = args.checkpoint
   camera_num = 2
 

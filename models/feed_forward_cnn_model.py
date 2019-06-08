@@ -82,8 +82,8 @@ class FeedForwardCNN(nn.Module):
                   groups=1,
                   bias=True),
         nn.ReLU(),
-        #nn.BatchNorm2d(16, eps=1e-05, affine=True),
-        nn.LayerNorm([16, H_1, W_1], eps=1e-05, elementwise_affine=True),
+        nn.BatchNorm2d(16, eps=1e-05, affine=True),
+        #nn.LayerNorm([16, H_1, W_1], eps=1e-05, elementwise_affine=True),
 
         # conv2
         nn.Conv2d(in_channels=conv2_in,
@@ -95,8 +95,8 @@ class FeedForwardCNN(nn.Module):
                   groups=1,
                   bias=True),
         nn.ReLU(),
-        #nn.BatchNorm2d(16, eps=1e-05, affine=True),
-        nn.LayerNorm([16, H_2, W_2], eps=1e-05, elementwise_affine=True),
+        nn.BatchNorm2d(16, eps=1e-05, affine=True),
+        #nn.LayerNorm([16, H_2, W_2], eps=1e-05, elementwise_affine=True),
 
         # conv3
         nn.Conv2d(in_channels=conv3_in,
@@ -108,8 +108,8 @@ class FeedForwardCNN(nn.Module):
                   groups=1,
                   bias=True),
         nn.ReLU(),
-        #nn.BatchNorm2d(16, eps=1e-05, affine=True),
-        nn.LayerNorm([16, H_3, W_3], eps=1e-05, elementwise_affine=True),
+        nn.BatchNorm2d(16, eps=1e-05, affine=True),
+        #nn.LayerNorm([16, H_3, W_3], eps=1e-05, elementwise_affine=True),
 
         # conv4
         nn.Conv2d(in_channels=conv4_in,
@@ -121,8 +121,8 @@ class FeedForwardCNN(nn.Module):
                   groups=1,
                   bias=True),
         nn.ReLU(),
-        #nn.BatchNorm2d(16, eps=1e-05, affine=True),
-        nn.LayerNorm([16, H_4, W_4], eps=1e-05, elementwise_affine=True),
+        nn.BatchNorm2d(16, eps=1e-05, affine=True),
+        #nn.LayerNorm([16, H_4, W_4], eps=1e-05, elementwise_affine=True),
         nn.Dropout(p=0.9),
         Flatten(),
         # Fully connected layers

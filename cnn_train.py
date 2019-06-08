@@ -15,8 +15,11 @@ from tqdm import tqdm
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--logdir', dest='logdir', default='', help='log directory')
+parser.add_argument('--load', dest='load', default=None, help='load checkpoint path')
+
 args = parser.parse_args()
 unique_logdir = args.logdir
+load_checkpoint_path = args.load
 # Will be updated in main() as a global
 logdir = ""
 
@@ -55,9 +58,8 @@ def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, mod
   val_loss_file = logdir + '/' + start_time_str + '_lr_' + lr_str + '_val_loss.txt'
 
   # If we are starting from a saved checkpoint epoch, load that checkpoint
-  if starting_epoch >= 0:
-    checkpoint_path = logdir + '/checkpoints/' + start_time_str + "_" + str(starting_epoch) + "_feed_forward.tar"
-    checkpoint = torch.load(checkpoint_path)
+  if load_checkpoint_path:
+    checkpoint = torch.load(load_checkpoint_path)
     model.load_state_dict(checkpoint['model_state_dict'])
     optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
     epoch = checkpoint["epoch"]
@@ -204,7 +206,7 @@ def main():
     logdir = unique_logdir + "_{0:.2e}".format(learning_rate)
     os.makedirs(logdir, exist_ok=True)
     os.makedirs(logdir + '/checkpoints/', exist_ok=True)
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=0)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=0.1)
     train_model(model, optimizer, loss_function, lr=learning_rate, starting_epoch=-1, train_dataloader=train_dataloader, val_dataloader=val_dataloader)
 
 
