@@ -10,11 +10,15 @@ from torchvision import transforms, utils
 from kitti_dataset import KittiDataset, SubsetSampler, ToTensor
 from models.feed_forward_cnn_model import FeedForwardCNN
 import argparse
+import os
+from tqdm import tqdm
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--logdir', dest='logdir', default='', help='log directory')
 args = parser.parse_args()
-logdir = args.logdir
+unique_logdir = args.logdir
+# Will be updated in main() as a global
+logdir = ""
 
 
 # Dataset specifications
@@ -47,12 +51,12 @@ def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, mod
     start_time_str = datetime.utcfromtimestamp(start_time).strftime('%Y-%m-%d_%H_%M')
 
   # Logs all files
-  loss_file = 'log/' + logdir + '/' + start_time_str + '_lr_' + lr_str + '_loss.txt'
-  val_loss_file = 'log/' + logdir + '/' + start_time_str + '_lr_' + lr_str + '_val_loss.txt'
+  loss_file = logdir + '/' + start_time_str + '_lr_' + lr_str + '_loss.txt'
+  val_loss_file = logdir + '/' + start_time_str + '_lr_' + lr_str + '_val_loss.txt'
 
   # If we are starting from a saved checkpoint epoch, load that checkpoint
   if starting_epoch >= 0:
-    checkpoint_path = "log/" + logdir + '/checkpoints/' start_time_str + "_" + str(starting_epoch) + "_feed_forward.tar"
+    checkpoint_path = logdir + '/checkpoints/' + start_time_str + "_" + str(starting_epoch) + "_feed_forward.tar"
     checkpoint = torch.load(checkpoint_path)
     model.load_state_dict(checkpoint['model_state_dict'])
     optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
@@ -71,7 +75,7 @@ def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, mod
 
   lowest_loss = None
 
-  for epoch in range(starting_epoch + 1, epochs):
+  for epoch in tqdm(range(starting_epoch + 1, epochs)):
     # Set model to training model
     model.train()
 
@@ -114,7 +118,7 @@ def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, mod
     # Save the best model after each epoch based on the lowest achieved validation loss
     if lowest_loss is None or lowest_loss > val_loss:
       lowest_loss = val_loss
-      model_name = 'log/' + logdir + '/checkpoints/' + start_time_str + '_' + lr_str  + '_bestloss_feed_forward.tar'
+      model_name = logdir + '/checkpoints/' + start_time_str + '_' + lr_str  + '_bestloss_feed_forward.tar'
       torch.save({
                   "epoch": epoch,
                   "model_state_dict": model.state_dict(),
@@ -125,7 +129,7 @@ def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, mod
 
   # Finish up. End of training
   print('elapsed time: {}'.format(time.time() - start_time))
-  model_name = 'log/' + logdir + '/checkpoints/' + start_time_str + '_' + lr_str +  '_end_feed_forward.tar'
+  model_name = logdir + '/checkpoints/' + start_time_str + '_' + lr_str +  '_end_feed_forward.tar'
   torch.save({
               "epoch": epochs, # the end
               "model_state_dict": model.state_dict(),
@@ -174,6 +178,8 @@ def create_dataloaders(dataset, batch_size, sampler=None):
 
 
 def main():
+  global unique_logdir
+  global logdir
   print("Creating dataloaders...")
   # Create dataset
   train_dataset = KittiDataset(SEQ_DIR, POSES_DIR, OXTS_DIR, transform=transforms.Compose([ToTensor()]), mode="train")
@@ -193,8 +199,10 @@ def main():
   # Construct loss function and optimizer
   loss_function = torch.nn.MSELoss(reduction='sum')
 
-  learning_rates = [1e-3, 1e-4]
+  learning_rates = [3e-4]
   for learning_rate in learning_rates:
+    logdir = unique_logdir + "_{0:.2e}".format(learning_rate)
+    os.makedirs(logdir, exist_ok=True)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=0.1)
     train_model(model, optimizer, loss_function, lr=learning_rate, starting_epoch=-1, train_dataloader=train_dataloader, val_dataloader=val_dataloader)
 
