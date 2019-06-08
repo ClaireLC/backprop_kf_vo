@@ -70,9 +70,8 @@ class processOuijaData():
     # Get rotation vectors at each timestep
     thetas = self.get_theta()
     
-    # Lists to hold forward and angular velocities
-    for_vel_list = []
-    ang_vel_list = []
+    # List to hold velocity tuples (forward, angular)
+    vels = []
   
     for i in range(1,len(self.times)):
       dt = self.times[i] - self.times[i-1]
@@ -80,8 +79,7 @@ class processOuijaData():
       # If frame timestamp is the same, append previous for, ang vels
       #print(i)
       if dt == 0:
-        for_vel_list.append(for_vel_list[-1])
-        ang_vel_list.append(ang_vel_list[-1])
+        vels.append(vels[-1])
         #print(i, for_vel, ang_vel, "\n")
         continue
 
@@ -109,15 +107,12 @@ class processOuijaData():
 
       ang_vel = d_theta_z / dt
 
-      for_vel_list.append(for_vel)
-      ang_vel_list.append(ang_vel)
+      vels.append((for_vel, ang_vel))
 
-      #print(i, for_vel, ang_vel, "\n")
-    return for_vel_list, ang_vel_list
+    return vels
 
 def main():
   data = processOuijaData("/Users/claire/Documents/Stanford/1_Spr/test_traj_4/data.txt")
-  for_vels, ang_vels= data.get_vels()
 
 if __name__ == "__main__":
   main()
