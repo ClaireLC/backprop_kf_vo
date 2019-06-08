@@ -80,7 +80,7 @@ class KittiDataset(Dataset):
     __getitem__ can directly index into this list.
     """
     data = []
-    for datapoint in self.dataset:
+    for datapoint in tqdm(self.dataset):
       data.append(self.format_datapoint(datapoint))
     self.dataset = data
 
@@ -90,7 +90,7 @@ class KittiDataset(Dataset):
     Takes in a datapoint which is currently formated as
     datapoint = curr_im_path, diff_im_path, velocity, seq_num_str
 
-    Output a datapoint in the format of 
+    Output a datapoint in the format of
     {
       "curr_im": curr_im,
       "diff_im": diff_im,
@@ -121,7 +121,7 @@ class KittiDataset(Dataset):
     if self.transform:
       sample = self.transform(sample)
 
-    return sample 
+    return sample
 
 
   def process_dataset(self, mode):
