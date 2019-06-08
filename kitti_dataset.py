@@ -8,6 +8,8 @@ from skimage import io
 import matplotlib.pyplot as plt
 import time
 
+save_dir = "/mnt/disks/dataset/"
+
 class KittiDataset(Dataset):
   """
   KITTI VO trajectories with ground truth poses and forward/angular velocities
@@ -38,30 +40,30 @@ class KittiDataset(Dataset):
     start_time = time.time()
     # Load existing parsed data if possible. Otherwise create and store them.
     self.dataset = None
-    if mode == "infer" and os.path.isfile("inorder_dataset.npy"):
+    if mode == "infer" and os.path.isfile(save_dir + "inorder_dataset.npy"):
       print("Loading inorder_dataset.npy, expected wait time: ", 0)
-      self.dataset = np.load("inorder_dataset.npy", allow_pickle=True)
+      self.dataset = np.load(save_dir + "inorder_dataset.npy", allow_pickle=True)
       print("Done, it took time: ", time.time() - start_time)
 
-    elif mode == "train" and os.path.isfile("train_dataset.npy"):
+    elif mode == "train" and os.path.isfile(save_dir + "train_dataset.npy"):
       print("Loading train_dataset.npy, expected wait time: ", 0)
-      self.dataset = np.load("train_dataset.npy", allow_pickle=True)
+      self.dataset = np.load(save_dir + "train_dataset.npy", allow_pickle=True)
       print("Done, it took time: ", time.time() - start_time)
 
-    elif mode == "val" and os.path.isfile("val_dataset.npy"):
+    elif mode == "val" and os.path.isfile(save_dir + "val_dataset.npy"):
       print("Loading val_dataset.npy, expected wait time: ", 0)
-      self.dataset = np.load("val_dataset.npy", allow_pickle=True)
+      self.dataset = np.load(save_dir + "val_dataset.npy", allow_pickle=True)
       print("Done, it took time: ", time.time() - start_time)
 
     else:
       self.process_dataset(mode)
       self.hydrate_dataset()
       if mode == "train":
-        np.save("train_dataset", np.asarray(self.dataset))
+        np.save(save_dir + "train_dataset", np.asarray(self.dataset))
       elif mode == "val":
-        np.save("val_dataset", np.asarray(self.dataset))
+        np.save(save_dir + "val_dataset", np.asarray(self.dataset))
       elif mode == "infer":
-        np.save("inorder_dataset", np.asarray(self.dataset))
+        np.save(save_dir + "inorder_dataset", np.asarray(self.dataset))
 
 
   def __len__(self):
