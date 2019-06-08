@@ -203,6 +203,7 @@ def main():
   for learning_rate in learning_rates:
     logdir = unique_logdir + "_{0:.2e}".format(learning_rate)
     os.makedirs(logdir, exist_ok=True)
+    os.makedirs(logdir + '/checkpoints/', exist_ok=True)
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=0.1)
     train_model(model, optimizer, loss_function, lr=learning_rate, starting_epoch=-1, train_dataloader=train_dataloader, val_dataloader=val_dataloader)
 
