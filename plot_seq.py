@@ -37,7 +37,7 @@ def plot_seq(dataset_type, traj_num):
     # Parse inferrence results
     x_vel_est = []
     theta_vel_est = []
-    est_path = "./cnn_results/piecewise_kf/" + "kitti_" + traj_name + ".txt"
+    est_path = "./cnn_results/" +  model_name + "/kitti_" + traj_name + ".txt"
     with open(est_path, "r") as fid:
       reader = csv.reader(fid, delimiter=",")
       next(reader)
@@ -125,7 +125,7 @@ def plot_seq(dataset_type, traj_num):
 
   plt.show()
 
-def main(dataset_type, traj_name):
+def main(dataset_type, traj_name, model_name):
   print("Plotting trajectories")
   plot_seq(dataset_type, traj_name)
 
@@ -133,9 +133,11 @@ if __name__ == "__main__":
   parser = argparse.ArgumentParser()
   parser.add_argument("--dataset", help="Datset type",  choices=["kitti", "ouija"])
   parser.add_argument("--traj_num", help="Name of trajectory (sequence number for KITTI)")
+  parser.add_argument("--model_name", help="name of model")
   args = parser.parse_args()
   
   dataset_type = args.dataset
   traj_name = args.traj_num
+  model_name = args.model_name
 
-  main(dataset_type, traj_name)
+  main(dataset_type, traj_name, model_name)

@@ -54,7 +54,7 @@ class KF():
         self.vels.append(np.asarray([for_vel,ang_vel]))
 
       # Get inferred velocities from cnn result txt files
-      path = "./cnn_results/piecewise_kf/" + "kitti_" + str(sequence) + ".txt"
+      path = "./cnn_results/" + model_name + "/kitti_" + str(sequence) + ".txt"
       with open(path, mode="r") as csv_fid:
         reader = csv.reader(csv_fid, delimiter=",")
         for i, row in enumerate(reader):
@@ -158,7 +158,7 @@ class KF():
     sig_next = (np.identity(5) - K @ C) @ sig_next_p
     return mu_next, sig_next
 
-def main(dataset, sequence):
+def main(dataset, sequence, model_name):
   print("Kalman filter")
 
   kf = KF(dataset, sequence)
@@ -312,7 +312,7 @@ def main(dataset, sequence):
   plt.title("{} Trajectory {}".format(dataset,sequence))
 
   # Save plot
-  fig_name = "./figs/{}_{}_traj_est.png".format(dataset,sequence)
+  fig_name = "./figs/{}_{}_{}_traj_est.png".format(model_name,dataset,sequence)
   plt.savefig(fig_name, format="png")
   #plt.figure()
   #plt.plot(indexes,sigmas)
@@ -322,8 +322,10 @@ if __name__ == "__main__":
   parser = argparse.ArgumentParser()
   parser.add_argument("--dataset", help="dataset type", choices=["ouija", "kitti"])
   parser.add_argument("--traj_num", help="trajectory number")
+  parser.add_argument("--model_name", help="name of model")
   args = parser.parse_args()
   dataset = args.dataset
   traj_num = args.traj_num
+  model_name = args.model_name
 
-  main(dataset, traj_num)
+  main(dataset, traj_num, model_name)
