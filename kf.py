@@ -5,6 +5,7 @@ import plot_seq
 import csv
 import argparse
 from statistics import mean
+import os
 
 from preprocessing.process_ouija_data import processOuijaData
 
@@ -312,6 +313,7 @@ def main(dataset, sequence, model_name):
   plt.title("{} Trajectory {}".format(dataset,sequence))
 
   # Save plot
+  os.makedirs("figs/", exist_ok=True)
   fig_name = "./figs/{}_{}_{}_traj_est.png".format(model_name,dataset,sequence)
   plt.savefig(fig_name, format="png")
   #plt.figure()
@@ -320,7 +322,7 @@ def main(dataset, sequence, model_name):
   
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
-  parser.add_argument("--dataset", help="dataset type", choices=["ouija", "kitti"])
+  parser.add_argument("--dataset", default='kitti', help="dataset type", choices=["ouija", "kitti"])
   parser.add_argument("--traj_num", help="trajectory number")
   parser.add_argument("--model_name", help="name of model")
   args = parser.parse_args()

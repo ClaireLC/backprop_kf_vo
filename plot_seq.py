@@ -131,7 +131,7 @@ def main(dataset_type, traj_name, model_name):
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
-  parser.add_argument("--dataset", help="Datset type",  choices=["kitti", "ouija"])
+  parser.add_argument("--dataset", default="kitti", help="Datset type",  choices=["kitti", "ouija"])
   parser.add_argument("--traj_num", help="Name of trajectory (sequence number for KITTI)")
   parser.add_argument("--model_name", help="name of model")
   args = parser.parse_args()
