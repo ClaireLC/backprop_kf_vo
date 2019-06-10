@@ -274,7 +274,6 @@ class KittiDataset(Dataset):
     oxts_file_digits = 10
     oxts_file_str = str(frame_num).zfill(oxts_file_digits)
     oxts_file_path = self.oxts_dir + seq_num_str + "/data/" + oxts_file_str + ".txt"
-    print(oxts_file_path)
 
     for_vel_line_num = 8
     ang_vel_line_num = 19
@@ -371,7 +370,7 @@ def main():
   dataset_1 = KittiDataset(seq_dir, poses_dir, oxts_dir, transform=transforms.Compose([ToTensor()]), mode="train")
   dataset_2 = KittiDataset(seq_dir, poses_dir, oxts_dir, transform=transforms.Compose([ToTensor()]), mode="val")
   dataset_3 = KittiDataset(seq_dir, poses_dir, oxts_dir, transform=transforms.Compose([ToTensor()]), mode="infer")
-  #print(len(dataset_1), len(dataset_2))
+  print(len(dataset_1), len(dataset_2), len(dataset_3))
 
 
   ##sample = dataset_1[20601-1]

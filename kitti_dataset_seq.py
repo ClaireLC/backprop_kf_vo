@@ -107,7 +107,7 @@ class KittiDatasetSeq(Dataset):
 
           data.append(sequence_data_formated)
       base_idx += num_frames
-    
+
     self.dataset = data
 
     if self.mode != "infer":
@@ -157,14 +157,14 @@ class KittiDatasetSeq(Dataset):
     Hi0 = init_pose
     # Hn0: orientation of frame {n} in {0}
     Hn0 = np.concatenate((curr_pose, np.array([0,0,0,1])),0)
-  
+
     # H0i is inverse of Hi0
     # Calculate inverse of Hi0
     R = Hi0[:,0:3] # rotation matrix part of Hi0
     P = Hi0[:,3] # translation part of Hi0
     temp = np.concatenate((R.T, -1 * R.T @ P),1)
-    H0i = np.concatenate((temp, np.array([0,0,0,1])), 0) 
- 
+    H0i = np.concatenate((temp, np.array([0,0,0,1])), 0)
+
     # Hni: orientation of frame {n} in {i}
     Hni = H0i @ Hn0
 
@@ -276,7 +276,7 @@ class KittiDatasetSeq(Dataset):
     pose = [float(s) for s in pose_str.split(" ")].reshape((3,4))
 
     return pose
-  
+
   def pose_to_xytheta(self, pose):
     """
     Extracts x,y and theta from 3x4 transformation matrix pose
@@ -294,7 +294,7 @@ class KittiDatasetSeq(Dataset):
 
     # Transpose theta to world frame
     theta += np.pi/2
-    
+
     return x, y, theta
 
 
@@ -418,9 +418,13 @@ def main():
   oxts_dir = "/mnt/disks/dataset/dataset_post/oxts/"
 
   dataset = KittiDatasetSeq(seq_dir, poses_dir, oxts_dir, mode="train")
+  dataset2 = KittiDatasetSeq(seq_dir, poses_dir, oxts_dir, mode="val")
 
   dataloader = DataLoader(dataset = dataset, batch_size = batch_size)
-  print(len(dataloader))
+  dataloader2 = DataLoader(dataset = dataset2, batch_size = batch_size)
+
+  print(len(dataloader), len(dataloader2))
+  pass
   for i, minibatch in enumerate(dataloader):
       # 100 sequences
       print(i, len(minibatch))
