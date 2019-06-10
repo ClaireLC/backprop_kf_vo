@@ -1,6 +1,7 @@
 import os
 import torch
 import numpy as np
+import math
 from tqdm import tqdm
 from torch.utils.data import Dataset, DataLoader, Sampler
 from torchvision import transforms, utils
@@ -104,8 +105,8 @@ class KittiDatasetSeq(Dataset):
           for datapoint in sequence_data:
             formated_datapoint = self.format_datapoint(datapoint, init_pose)
             sequence_data_formated.append(formated_datapoint)
-
           data.append(sequence_data_formated)
+
       base_idx += num_frames
     
     self.dataset = data
@@ -156,14 +157,14 @@ class KittiDatasetSeq(Dataset):
     # Hi0: orientation of frame {i} in {0}
     Hi0 = init_pose
     # Hn0: orientation of frame {n} in {0}
-    Hn0 = np.concatenate((curr_pose, np.array([0,0,0,1])),0)
+    Hn0 = np.concatenate((curr_pose, np.array([[0,0,0,1]])),0)
   
     # H0i is inverse of Hi0
     # Calculate inverse of Hi0
     R = Hi0[:,0:3] # rotation matrix part of Hi0
     P = Hi0[:,3] # translation part of Hi0
-    temp = np.concatenate((R.T, -1 * R.T @ P),1)
-    H0i = np.concatenate((temp, np.array([0,0,0,1])), 0) 
+    temp = np.concatenate((R.T, (-1 * R.T @ P).reshape((3,1))),1)
+    H0i = np.concatenate((temp, np.array([[0,0,0,1]])), 0) 
  
     # Hni: orientation of frame {n} in {i}
     Hni = H0i @ Hn0
@@ -273,7 +274,7 @@ class KittiDatasetSeq(Dataset):
       if i > frame_num - 1:
         break
     # Pose is 3x4 transformation matrix
-    pose = [float(s) for s in pose_str.split(" ")].reshape((3,4))
+    pose = np.asarray([float(s) for s in pose_str.split(" ")]).reshape((3,4))
 
     return pose
   
@@ -283,18 +284,16 @@ class KittiDatasetSeq(Dataset):
     """
     # Get x, y, theta from pose matrix which is 3 x 4
     # The first 3 x 3 part is rotaion matrix and the last 3 x 1 is [x, y, z].T
-    x_ind = 3
-    y_ind = 11
-    x = pose[x_ind]
-    y = pose[y_ind]
-    if np.arcsin(pose[0]) > 0:
-      theta = np.arccos(pose[0])
-    else:
-      theta = np.arccos(pose[0]) * -1
+    x = pose[0,3]
+    y = pose[2,3] # z is forward in camera frame
 
-    # Transpose theta to world frame
-    theta += np.pi/2
-    
+    if np.arcsin(pose[0,0]) > 0:
+      theta = np.arccos(pose[0,0])
+    else:
+      theta = np.arccos(pose[0,0]) * -1
+    if math.isnan(theta):
+      theta = 0.0
+
     return x, y, theta
 
 
