@@ -34,9 +34,9 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Global parameters
 batch_size = 50
-epochs = 100
+epochs = 300
 
-def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, model_id=None,
+def train_model(model, optimizer, scheduler, loss_function, lr=1e-4, starting_epoch=-1, model_id=None,
   train_dataloader=None, val_dataloader=None):
   """
     starting_epoch: the epoch to start training. If -1, this means we
@@ -111,6 +111,7 @@ def train_model(model, optimizer, loss_function, lr=1e-4, starting_epoch=-1, mod
 
     # End of epoch
     val_loss = validation_loss(model, val_dataloader, loss_function)
+    scheduler.step(val_loss)
     print()
     print('epoch {}, validation loss = {}'.format(epoch, val_loss))
     print()
@@ -201,13 +202,14 @@ def main():
   # Construct loss function and optimizer
   loss_function = torch.nn.MSELoss(reduction='sum')
 
-  learning_rates = [3e-4]
+  learning_rates = [3e-4, 1e-5]
   for learning_rate in learning_rates:
     logdir = unique_logdir + "_{0:.2e}".format(learning_rate)
     os.makedirs(logdir, exist_ok=True)
     os.makedirs(logdir + '/checkpoints/', exist_ok=True)
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=0.1)
-    train_model(model, optimizer, loss_function, lr=learning_rate, starting_epoch=-1, train_dataloader=train_dataloader, val_dataloader=val_dataloader)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=0)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
+    train_model(model, optimizer, scheduler, loss_function, lr=learning_rate, starting_epoch=-1, train_dataloader=train_dataloader, val_dataloader=val_dataloader)
 
 
 if __name__ == "__main__":
