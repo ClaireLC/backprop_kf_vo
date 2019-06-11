@@ -13,7 +13,11 @@ def plot_seq(dataset_type, traj_num):
 
   # KITTI: Open seq_num.txt file
   if dataset_type == "kitti":
-    file_path = "./dataset/poses/" + traj_name.zfill(2) + ".txt"
+    # These two are only used by ouija so set to None
+    for_vels, ang_vels = None, None
+
+    # Get x, y
+    file_path = "./dataset/poses/" + traj_num.zfill(2) + ".txt"
     x_ind = 3
     y_ind = 7
     with open(file_path, "r") as fid:
@@ -23,7 +27,7 @@ def plot_seq(dataset_type, traj_num):
         y.append(row[y_ind])
 
     # Get oxts data
-    oxts_dir = "./dataset/" + traj_name.zfill(2) + "/data/"
+    oxts_dir = "./dataset/" + traj_num.zfill(2) + "/data/"
     acc = []
     for i in range(len(x)):
       oxts_file_path = oxts_dir + str(i).zfill(10) + ".txt"
@@ -37,7 +41,7 @@ def plot_seq(dataset_type, traj_num):
     # Parse inferrence results
     x_vel_est = []
     theta_vel_est = []
-    est_path = "./cnn_results/" +  model_name + "/kitti_" + traj_name + ".txt"
+    est_path = "./cnn_results/" +  model_name + "/kitti_" + traj_num + ".txt"
     with open(est_path, "r") as fid:
       reader = csv.reader(fid, delimiter=",")
       next(reader)
@@ -46,7 +50,7 @@ def plot_seq(dataset_type, traj_num):
         theta_vel_est.append(float(row[1]))
   
   elif dataset_type == "ouija":
-    file_path = "../test_traj_" + traj_name.zfill(1) + "/data.txt"
+    file_path = "../test_traj_" + traj_num.zfill(1) + "/data.txt"
     x_ind = 1
     y_ind = 2
     x_vel_ind = 8
@@ -69,7 +73,7 @@ def plot_seq(dataset_type, traj_num):
     theta_vel_est = []
     x_vel_scaler = 1/20
     theta_vel_scaler = 1
-    est_path = "../test_traj_" + traj_name.zfill(1) + "/results.txt"
+    est_path = "../test_traj_" + traj_num.zfill(1) + "/results.txt"
     with open(est_path, "r") as fid:
       reader = csv.reader(fid, delimiter=",")
       next(reader)
@@ -79,9 +83,13 @@ def plot_seq(dataset_type, traj_num):
         x_vel_est.append((float(row[0]) - 7)/5)
         theta_vel_est.append(float(row[1]) * theta_vel_scaler)
 
+  return (x, y, x_vel, x_vel_est, theta_vel, theta_vel_est, for_vels, ang_vels)
 
+
+def plot_figures(dataset_type, traj_num, x, y, x_vel, x_vel_est, theta_vel, theta_vel_est, for_vels=None, ang_vels=None):
   # Plot trajectory
   # If plotting ouija, switch x and y to match mocap frame
+  """
   if dataset_type == "kitti":
     plt.plot(x,y,'.')
     plt.plot(x[0],y[0],'ro')
@@ -94,10 +102,12 @@ def plot_seq(dataset_type, traj_num):
     plt.axis("equal")
     plt.xlabel("y in mocap frame (m)")
     plt.ylabel("x in mocap frame (m)")
-  plt.title("Robot trajectory, {} Trajectory {}".format(dataset_type, traj_name))
+  plt.title("Robot trajectory, {} Trajectory {}".format(dataset_type, traj_num))
+  """
 
   # Plot forward velocities
-  plt.figure()
+  plt.figure(figsize=(10, 4))
+  plt.subplot(1, 2, 1)
   if dataset_type == "kitti":
     plt.plot(range(len(x_vel)),x_vel, label="Ground truth")  
     plt.plot(range(len(x_vel_est)),x_vel_est, label="Inferred")
@@ -108,9 +118,9 @@ def plot_seq(dataset_type, traj_num):
   plt.legend()
   plt.xlabel("timestep (frame number)")
   plt.ylabel("velocity (m/s)")
-  plt.title("Forward velocity, {} Trajectory {}".format(dataset_type, traj_name))
+  plt.title("Forward velocity, {} Trajectory {}".format(dataset_type, traj_num))
 
-  plt.figure()
+  plt.subplot(1, 2, 2)
   if dataset_type == "kitti":
     plt.plot(range(len(theta_vel)),theta_vel, label="Ground truth")  
     plt.plot(range(len(theta_vel_est)),theta_vel_est, label="Inferred")
@@ -119,20 +129,26 @@ def plot_seq(dataset_type, traj_num):
     plt.plot(range(len(theta_vel_est)),theta_vel_est, label="Inferred")
     plt.plot(range(len(ang_vels)), ang_vels, label="From Optitrack")
   plt.legend()
-  plt.title("Angular velocity, {} Trajectory {}".format(dataset_type, traj_name))
+  plt.title("Angular velocity, {} Trajectory {}".format(dataset_type, traj_num))
   plt.xlabel("timestep (frame number)")
   plt.ylabel("velocity (rad/s)")
 
-  plt.show()
+  #plt.show(block=False)
+
 
 def main(dataset_type, traj_name, model_name):
   print("Plotting trajectories")
-  plot_seq(dataset_type, traj_name)
+  
+  for traj in traj_name:
+    data = plot_seq(dataset_type, traj)
+    plot_figures(dataset_type, traj, *data)
+  plt.show()
+
 
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
   parser.add_argument("--dataset", default="kitti", help="Datset type",  choices=["kitti", "ouija"])
-  parser.add_argument("--traj_num", help="Name of trajectory (sequence number for KITTI)")
+  parser.add_argument("--traj_num", nargs='+', help="Name of trajectory (sequence number for KITTI)")
   parser.add_argument("--model_name", help="name of model")
   args = parser.parse_args()
   
