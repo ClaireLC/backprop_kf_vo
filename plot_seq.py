@@ -1,6 +1,7 @@
 import csv
 import argparse
 import matplotlib.pyplot as plt
+import os
 
 from preprocessing.process_ouija_data import processOuijaData
 
@@ -133,7 +134,11 @@ def plot_figures(dataset_type, traj_num, x, y, x_vel, x_vel_est, theta_vel, thet
   plt.xlabel("timestep (frame number)")
   plt.ylabel("velocity (rad/s)")
 
-  #plt.show(block=False)
+  if args.save_plot:
+      # Save plot
+      os.makedirs("figs/", exist_ok=True)
+      fig_name = "./figs/{}_{}_{}_vel_est.png".format(model_name, dataset_type, traj_num)
+      plt.savefig(fig_name, format="png")
 
 
 def main(dataset_type, traj_name, model_name):
@@ -150,6 +155,7 @@ if __name__ == "__main__":
   parser.add_argument("--dataset", default="kitti", help="Datset type",  choices=["kitti", "ouija"])
   parser.add_argument("--traj_num", nargs='+', help="Name of trajectory (sequence number for KITTI). Can be multiple separated with space")
   parser.add_argument("--model_name", help="name of model")
+  parser.add_argument("--save_plot", default=False, type=bool, help="Saves plot if set to True")
   args = parser.parse_args()
   
   dataset_type = args.dataset
