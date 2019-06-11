@@ -5,12 +5,13 @@ import plot_seq
 import csv
 import argparse
 from statistics import mean
+import os
 
 from preprocessing.process_ouija_data import processOuijaData
 
 class KF():
 
-  def __init__(self, dataset, sequence):
+  def __init__(self, dataset, sequence, model_name):
     # Load data
     self.x = [] # Ground truth x position
     self.y = [] # Ground truth y position
@@ -92,6 +93,7 @@ class KF():
             #vel_hat.append([float(row[0]), 1*float(row[1])])
             self.vel_hat.append([(float(row[0])-7)/5, 1*float(row[1])])
 
+
   # Calculating the A matrix given current state
   def A_calc(self, x, y, theta, v, omega, dt, dataset):
     # Initialize 5x5 A matrix
@@ -117,6 +119,7 @@ class KF():
   
     return(A)
   
+
   # Update state estimate with dynamics equations
   def update_mu(self, mu, dt):
     x = mu[0]
@@ -134,6 +137,7 @@ class KF():
     
     return mu_next
     
+
   # Kalman Filter update step
   def kf_step(self, mu, sig, z, dt, dataset):
     # Parse state 
@@ -158,10 +162,9 @@ class KF():
     sig_next = (np.identity(5) - K @ C) @ sig_next_p
     return mu_next, sig_next
 
-def main(dataset, sequence, model_name):
-  print("Kalman filter")
 
-  kf = KF(dataset, sequence)
+def compute_kf(dataset, sequence, model_name):
+  kf = KF(dataset, sequence, model_name)
 
   # Number of timesteps to calculate
   MAX = len(kf.vel_hat)
@@ -287,17 +290,22 @@ def main(dataset, sequence, model_name):
   print("using true velocities: translational {} rotational {}".format(trans_err_avg, rot_err_avg))
   print("using inferred velocities: translational {} rotational {}".format(est_trans_err_avg, est_rot_err_avg))
 
-  ################################## Plot #####################################
+  return kf, MAX, x_list, y_list, x_list_est, y_list_est
+
+
+def plot_kf(plt, plt_idx, sequence, kf, MAX, x_list, y_list, x_list_est, y_list_est):
+  plt.subplot(1, 2, plt_idx)
+
   # If dataset is ouija, switch x and y to match mocap frame
   if dataset == "kitti":
     line_true = plt.plot(kf.x[0:MAX], kf.y[0:MAX], label="Actual")
-    line_kf_true = plt.plot(x_list, y_list, label="KF using true velocities as observations")
+    line_kf_true = plt.plot(x_list, y_list, label="KF using true vels")
     line_kf_est = plt.plot(x_list_est, y_list_est, label="KF using inferred vels")
     plt.ylabel("y (m)")
     plt.xlabel("x (m)")
   elif dataset == "ouija":
     line_true = plt.plot(kf.y[0:MAX], kf.x[0:MAX], label="Actual")
-    line_kf_true = plt.plot(y_list, x_list, label="KF using true velocities as observations")
+    line_kf_true = plt.plot(y_list, x_list, label="KF using true vels")
     line_kf_est = plt.plot(y_list_est, x_list_est, label="KF using inferred vels")
     plt.xlim(5, -5)
     plt.axis("equal")
@@ -309,20 +317,35 @@ def main(dataset, sequence, model_name):
   plt.setp(line_kf_true, color='g', ls='-', marker='.')
 
   plt.legend()
-  plt.title("{} Trajectory {}".format(dataset,sequence))
-
-  # Save plot
-  fig_name = "./figs/{}_{}_{}_traj_est.png".format(model_name,dataset,sequence)
-  plt.savefig(fig_name, format="png")
-  #plt.figure()
-  #plt.plot(indexes,sigmas)
-  plt.show()
+  plt.title("{} Trajectory {} \non {}".format(dataset, sequence, model_name[plt_idx - 1]))
   
+
+def main(dataset, traj_num, model_name):
+  print("Kalman filter")
+
+  for sequence in traj_num:
+    data = []
+    plt.figure(figsize=(5 * len(model_name), 5))
+    for plt_idx in range(len(model_name)):
+      data = compute_kf(dataset, sequence, model_name[plt_idx])
+      plot_kf(plt, plt_idx + 1, sequence, *data) 
+    plt.show(block=False)
+
+    if args.save_plot:
+      # Save plot
+      os.makedirs("figs/", exist_ok=True)
+      fig_name = "./figs/{}_{}_traj_est.png".format(dataset, sequence)
+      plt.savefig(fig_name, format="png")
+
+  plt.show()
+
+
 if __name__ == "__main__":
   parser = argparse.ArgumentParser()
-  parser.add_argument("--dataset", help="dataset type", choices=["ouija", "kitti"])
-  parser.add_argument("--traj_num", help="trajectory number")
-  parser.add_argument("--model_name", help="name of model")
+  parser.add_argument("--dataset", default='kitti', help="dataset type", choices=["ouija", "kitti"])
+  parser.add_argument("--traj_num", nargs='+', help="trajectory number. Can be multiple separated with space")
+  parser.add_argument("--model_name", nargs='+', help="name of model. Can be multiple separated with space")
+  parser.add_argument("--save_plot", default=False, type=bool, help="Saves plot if set to True")
   args = parser.parse_args()
   dataset = args.dataset
   traj_num = args.traj_num
