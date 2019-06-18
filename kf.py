@@ -20,6 +20,7 @@ class KF():
     self.times = [] # Timestamps
     self.vel_hat = [] # Inferred velocity tuples (forward, angular)
     self.opti_vels = [] # Optitrack velocities (forward, angular)
+  
 
     if dataset == "kitti":
       # Open ground truth pose file
@@ -227,7 +228,21 @@ def compute_kf(dataset, sequence, model_name):
   sig_next = sig_init
   sig_next_est = sig_init
 
-  segment_length = 10
+  # Error calc parameters
+  segment_length = 100
+  err_file_dir = "./traj_error"
+  err_file_name = "{}/{}_{}.txt".format(err_file_dir, model_name, segment_length)
+    
+  # Check if directory exists, or make one
+  if not os.path.isdir(err_file_dir):
+    os.mkdir(err_file_dir)
+
+  # Write error heading to csv if there is no file yet
+  if not os.path.isfile(err_file_name):
+    with open (err_file_name, mode="a+") as fid:
+      writer = csv.writer(fid, delimiter=",")
+      writer.writerow(["seq num", "true vel trans err", "true vel rot err", "infer vel trans err", "infer vel rot err"])
+
   dist_traveled = 0
   
   trans_errs = []
@@ -289,6 +304,11 @@ def compute_kf(dataset, sequence, model_name):
   print("Average filter error")
   print("using true velocities: translational {} rotational {}".format(trans_err_avg, rot_err_avg))
   print("using inferred velocities: translational {} rotational {}".format(est_trans_err_avg, est_rot_err_avg))
+
+  # Write error to csv
+  with open (err_file_name, mode="a+") as fid:
+    writer = csv.writer(fid, delimiter=",")
+    writer.writerow([sequence, trans_err_avg, rot_err_avg, est_trans_err_avg, est_rot_err_avg])
 
   return kf, MAX, x_list, y_list, x_list_est, y_list_est
 
