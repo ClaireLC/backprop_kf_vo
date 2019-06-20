@@ -1,7 +1,6 @@
 import os
 import torch
 import numpy as np
-import math
 from tqdm import tqdm
 from torch.utils.data import Dataset, DataLoader, Sampler
 from torchvision import transforms, utils
@@ -100,13 +99,11 @@ class KittiDatasetSeq(Dataset):
           sequence_data = self.dataset[base_idx + i : base_idx + i + self.seq_length]
           sequence_data_formated = []
 
-          # Transform poses in sequence to coordinates of intial frame
-          init_pose = sequence_data[0][3]
           for datapoint in sequence_data:
-            formated_datapoint = self.format_datapoint(datapoint, init_pose)
+            formated_datapoint = self.format_datapoint(datapoint)
             sequence_data_formated.append(formated_datapoint)
-          data.append(sequence_data_formated)
 
+          data.append(sequence_data_formated)
       base_idx += num_frames
 
     self.dataset = data
@@ -122,18 +119,17 @@ class KittiDatasetSeq(Dataset):
       self.dataset = val_dataset
 
 
-  def format_datapoint(self, datapoint, init_pose):
+  def format_datapoint(self, datapoint):
     """
     Takes in a datapoint which is currently formated as
-    datapoint = curr_im_path, diff_im_path, velocity, pose, cur_time, seq_num_str
-    Transform pose in each sequence to reference frame of of initial image frame
+    datapoint = curr_im_path, diff_im_path, velocity, x, y, theta, cur_time, seq_num_str
 
     Output a datapoint in the format of (image, state, time)
     image : cur_image and diff_image put side by side into one image
     state : (x, y, theta, v_for, v_ang)
     time : current time of the frame
     """
-    curr_im_path, diff_im_path, velocity, curr_pose, cur_time, seq_num_str = datapoint
+    curr_im_path, diff_im_path, velocity, x, y, theta, cur_time, seq_num_str = datapoint
 
     # Get images
     curr_im = io.imread(curr_im_path)
@@ -149,28 +145,6 @@ class KittiDatasetSeq(Dataset):
     compos_image = np.concatenate((curr_im, diff_im), 0)
     for_vel = velocity[0]
     ang_vel = velocity[1]
-
-    # Transform pose of current image into coordinate frame of inital image
-    # n is current image frame, i is initial image frame in sequence
-    # 0 is initial image frame in total trajectory
-
-    # Hi0: orientation of frame {i} in {0}
-    Hi0 = init_pose
-    # Hn0: orientation of frame {n} in {0}
-    Hn0 = np.concatenate((curr_pose, np.array([[0,0,0,1]])),0)
-  
-    # H0i is inverse of Hi0
-    # Calculate inverse of Hi0
-    R = Hi0[:,0:3] # rotation matrix part of Hi0
-    P = Hi0[:,3] # translation part of Hi0
-    temp = np.concatenate((R.T, (-1 * R.T @ P).reshape((3,1))),1)
-    H0i = np.concatenate((temp, np.array([[0,0,0,1]])), 0) 
-    # Hni: orientation of frame {n} in {i}
-    Hni = H0i @ Hn0
-
-    # Extract x,y,theta from transformation matrix
-    x,y,theta = self.pose_to_xytheta(Hni[0:3,:])
-
     state = (x, y, theta, for_vel, ang_vel)
 
     return (compos_image, state, cur_time)
@@ -217,11 +191,11 @@ class KittiDatasetSeq(Dataset):
         # Get velocity: [for_vel, ang_vel]
         velocity = self.get_velocity(seq_num_str, frame_num)
         # Get pose
-        pose = self.get_groundtruth_poses(seq_num_str, frame_num)
+        x, y, theta = self.get_groudtruth_poses(seq_num_str, frame_num)
         # Get current time
         cur_time = self.get_timestamp(seq_num_str, frame_num)
 
-        formated_dataset.append((curr_im_path, diff_im_path, velocity, pose, cur_time, seq_num_str))
+        formated_dataset.append((curr_im_path, diff_im_path, velocity, x, y, theta, cur_time, seq_num_str))
 
     self.dataset = formated_dataset
 
@@ -260,7 +234,7 @@ class KittiDatasetSeq(Dataset):
     self.dataset = np.asarray(self.dataset)
 
 
-  def get_groundtruth_poses(self, seq_num_str, frame_num):
+  def get_groudtruth_poses(self, seq_num_str, frame_num):
     """
     Gets ground truth pose from seq_num.txt file
     """
@@ -272,29 +246,23 @@ class KittiDatasetSeq(Dataset):
         pose_str = line
       if i > frame_num - 1:
         break
-    # Pose is 3x4 transformation matrix
-    pose = np.asarray([float(s) for s in pose_str.split(" ")]).reshape((3,4))
+    pose = [float(s) for s in pose_str.split(" ")]
 
-    return pose
-
-  def pose_to_xytheta(self, pose):
-    """
-    Extracts x,y and theta from 3x4 transformation matrix pose
-    """
     # Get x, y, theta from pose matrix which is 3 x 4
     # The first 3 x 3 part is rotaion matrix and the last 3 x 1 is [x, y, z].T
-    x = pose[0,3]
-    y = pose[2,3] # z is forward in camera frame
-
-    if np.arcsin(pose[0,0]) > 0:
-      theta = np.arccos(pose[0,0])
+    x_ind = 3
+    y_ind = 11
+    x = pose[x_ind]
+    y = pose[y_ind]
+    if np.arcsin(pose[0]) > 0:
+      theta = np.arccos(pose[0])
     else:
-      theta = np.arccos(pose[0,0]) * -1
-    if math.isnan(theta):
-      theta = 0.0
+      theta = np.arccos(pose[0]) * -1
+
+    # Transpose theta to world frame
+    theta += np.pi/2
 
     return x, y, theta
-
 
 
   def get_timestamp(self, seq_num_str, frame_num):
@@ -416,13 +384,9 @@ def main():
   oxts_dir = "/mnt/disks/dataset/dataset_post/oxts/"
 
   dataset = KittiDatasetSeq(seq_dir, poses_dir, oxts_dir, mode="train")
-  dataset2 = KittiDatasetSeq(seq_dir, poses_dir, oxts_dir, mode="val")
 
   dataloader = DataLoader(dataset = dataset, batch_size = batch_size)
-  dataloader2 = DataLoader(dataset = dataset2, batch_size = batch_size)
-
-  print(len(dataloader), len(dataloader2))
-  pass
+  print(len(dataloader))
   for i, minibatch in enumerate(dataloader):
       # 100 sequences
       print(i, len(minibatch))
