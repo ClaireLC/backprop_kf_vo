@@ -8,8 +8,7 @@ from skimage import io
 import matplotlib.pyplot as plt
 import time
 
-save_dir = "/mnt/disks/dataset/"
-
+save_dir = "/mnt/disks/dataset/" 
 class KittiDataset(Dataset):
   """
   KITTI VO trajectories with ground truth poses and forward/angular velocities
@@ -90,34 +89,34 @@ class KittiDataset(Dataset):
   def format_datapoint(self, datapoint):
     """
     Takes in a datapoint which is currently formated as
-    datapoint = curr_im_path, diff_im_path, velocity, seq_num_str
+    datapoint = curr_im_path, diff_im_path, velocity, seq_num_str, frame_num
 
     Output a datapoint in the format of
     {
       "curr_im": curr_im,
       "diff_im": diff_im,
       "vel": velocity,
+      "pose": x,y,theta pose
+      "curr_time": current timestamp
     }
     And then this dict is put through self.tansform
     """
-    curr_im_path, diff_im_path, velocity, seq_num_str = datapoint
+    curr_im_path, diff_im_path, velocity, seq_num_str, frame_num = datapoint
 
     curr_im = io.imread(curr_im_path)
     diff_im = io.imread(diff_im_path)
 
-    # Currently the cnn doesn't use this. Commented out to speed up dataloader
-    #pose = self.get_groudtruth_poses(seq_num_str)
+    pose = self.get_groundtruth_poses(seq_num_str, frame_num)
 
-    # Currently the cnn doesn't use this. Commented out to speed up DataLoader
-    # curr_time = self.get_timestamp(self, seq_num_str)
+    curr_time = self.get_timestamp(seq_num_str, frame_num)
 
     # Format sample
     sample= {
             "curr_im": curr_im,
             "diff_im": diff_im,
             "vel": velocity,
-            #"pose": np.asarray(pose),
-            #"curr_time": np.asarray(curr_time),
+            "pose": np.asarray(pose),
+            "curr_time": np.asarray(curr_time),
             }
 
     if self.transform:
@@ -167,7 +166,7 @@ class KittiDataset(Dataset):
         # Get velocity: [for_vel, ang_vel]
         velocity = self.get_velocity(seq_num_str, frame_num)
 
-        formated_dataset.append((curr_im_path, diff_im_path, velocity, seq_num_str))
+        formated_dataset.append((curr_im_path, diff_im_path, velocity, seq_num_str, frame_num))
 
     self.dataset = formated_dataset
 
@@ -225,7 +224,7 @@ class KittiDataset(Dataset):
         self.dataset = val_dataset
 
 
-  def get_groudtruth_poses(self, seq_num_str):
+  def get_groundtruth_poses(self, seq_num_str, frame_num):
     """
     Gets ground truth pose from seq_num.txt file
     """
@@ -233,15 +232,30 @@ class KittiDataset(Dataset):
     fid = open(poses_file_path)
     pose_str = None
     for i, line in enumerate(fid):
-      if i == frame_num - 1:
+      if i == frame_num:
         pose_str = line
-      if i > frame_num - 1:
+      if i > frame_num:
         break
     pose = [float(s) for s in pose_str.split(" ")]
-    return pose
+
+    # Get x, y, theta from pose matrix which is 3 x 4
+    # The first 3 x 3 part is rotaion matrix and the last 3 x 1 is [x, y, z].T
+    x_ind = 3
+    y_ind = 11
+    x = pose[x_ind]
+    y = pose[y_ind]
+    if np.arcsin(pose[0]) > 0:
+      theta = np.arccos(pose[0])
+    else:
+      theta = np.arccos(pose[0]) * -1
+
+    # Transpose theta to world frame
+    theta += np.pi/2
+
+    return [x, y, theta]
 
 
-  def get_timestamp(self, seq_num_str):
+  def get_timestamp(self, seq_num_str, frame_num):
     """
     Gets timestamp
     """
@@ -295,8 +309,8 @@ class ToTensor(object):
     curr_im = sample["curr_im"]
     diff_im = sample["diff_im"]
     vel = sample["vel"]
-    #pose    = sample["pose"]
-    #curr_time = sample["curr_time"]
+    pose    = sample["pose"]
+    curr_time = sample["curr_time"]
 
     # Swap image axes because
     # numpy image: H x W x C
@@ -308,8 +322,8 @@ class ToTensor(object):
             "curr_im": torch.from_numpy(curr_im),
             "diff_im": torch.from_numpy(diff_im),
             "vel":     torch.from_numpy(vel),
-            #"pose":    torch.from_numpy(pose),
-            #"curr_time": torch.from_numpy(curr_time),
+            "pose":    torch.from_numpy(pose),
+            "curr_time": torch.from_numpy(curr_time),
             }
 
 class SubsetSampler(Sampler):
@@ -365,7 +379,7 @@ class SequenceSampler(Sampler):
 
 def main():
   seq_dir = "/mnt/disks/dataset/dataset_post/sequences/"
-  poses_dir = "/mnt/disks/dataset/dataset/poses/"
+  poses_dir = "/mnt/disks/dataset/dataset_post/poses/"
   oxts_dir = "/mnt/disks/dataset/dataset_post/oxts/"
   dataset_1 = KittiDataset(seq_dir, poses_dir, oxts_dir, transform=transforms.Compose([ToTensor()]), mode="train")
   dataset_2 = KittiDataset(seq_dir, poses_dir, oxts_dir, transform=transforms.Compose([ToTensor()]), mode="val")
