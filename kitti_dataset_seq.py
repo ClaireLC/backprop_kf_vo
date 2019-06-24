@@ -242,9 +242,9 @@ class KittiDatasetSeq(Dataset):
     fid = open(poses_file_path)
     pose_str = None
     for i, line in enumerate(fid):
-      if i == frame_num - 1:
+      if i == frame_num:
         pose_str = line
-      if i > frame_num - 1:
+      if i > frame_num:
         break
     pose = [float(s) for s in pose_str.split(" ")]
 
