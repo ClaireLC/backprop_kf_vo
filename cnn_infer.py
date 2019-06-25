@@ -1,5 +1,10 @@
 """
-Run inferrence on a KITTI trajectory
+Run inferrence on a KITTI trajectory using Feed Forward CNN only
+Save inferred forward and angular velocities as a csv
+Args:
+--checkpoint: Path to model checkpoint
+--save: Path to save directory
+--traj_num: KITTI trajectory number
 """
 import numpy as np
 import time
@@ -19,16 +24,16 @@ from matplotlib import pyplot as plt
 from models.feed_forward_cnn_model import FeedForwardCNN
 from kitti_dataset import KittiDataset, ToTensor, SequenceSampler
 
+# Arg parser
 parser = argparse.ArgumentParser()
-parser.add_argument('--checkpoint', dest='checkpoint', default='', help='model checkpoint')
-parser.add_argument('--save', dest='save', default='./cnn_results/', help='save location')
+parser.add_argument('--checkpoint', dest='checkpoint', default='', help='Path to model checkpoint')
+parser.add_argument('--save', dest='save', default='./cnn_results/', help='Path to save directory')
 parser.add_argument("--traj_num", dest='traj_num', default='0', help="Trajectory number")
 
 args = parser.parse_args()
 os.makedirs(args.save, exist_ok=True)
 
 # Device specification
-#device = torch.device('cuda')
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Setup
