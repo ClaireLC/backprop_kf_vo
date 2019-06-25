@@ -230,6 +230,7 @@ def compute_kf(dataset, sequence, model_name):
 
   # Error calc parameters
   segment_length = 100
+  segment_timesteps = 100
   err_file_dir = "./traj_error"
   err_file_name = "{}/{}_{}.txt".format(err_file_dir, model_name, segment_length)
     
@@ -244,12 +245,12 @@ def compute_kf(dataset, sequence, model_name):
       writer.writerow(["seq num", "true vel trans err", "true vel rot err", "infer vel trans err", "infer vel rot err"])
 
   dist_traveled = 0
+  curr_timestep = 0
   
   trans_errs = []
   rot_errs = []
   est_trans_errs = []
   est_rot_errs = []
-
 
   for i in range(1, MAX):
     #print("\n Iteration {}".format(i))
@@ -260,6 +261,9 @@ def compute_kf(dataset, sequence, model_name):
     # Calculate distance traveled since last error calc
     dist = np.linalg.norm([kf.x[i] - kf.x[i-1], kf.y[i] - kf.y[i-1]])
     dist_traveled += dist
+
+    # Update curr_timestep
+    curr_timestep += 1
 
     # Observed velocities
     if dataset == "kitti":
@@ -277,16 +281,18 @@ def compute_kf(dataset, sequence, model_name):
     # If segment_length distance has been traveled since last reset
     # Calculate translational and rotational error
     # Reset initial conditions to ground truth
-    if dist_traveled >= segment_length:
+    if curr_timestep >= segment_timesteps :
+    #if dist_traveled >= segment_length:
       # Calculate translational error
       # Filter with ground truth velocities
-      trans_errs.append(np.linalg.norm([mu_next[0] - kf.x[i], mu_next[1] - kf.y[i]]))
-      rot_errs.append(abs(mu_next[2] - kf.thetas[i]))
+      trans_errs.append(np.linalg.norm([mu_next[0] - kf.x[i], mu_next[1] - kf.y[i]]) * (1/dist_traveled))
+      rot_errs.append(abs(mu_next[2] - kf.thetas[i]) * (1/dist_traveled))
 
       # Filter with inferred velocities
-      est_trans_errs.append(np.linalg.norm([mu_next_est[0] - kf.x[i], mu_next_est[1] - kf.y[i]]))
-      est_rot_errs.append(abs(mu_next_est[2] - kf.thetas[i]))
+      est_trans_errs.append((np.linalg.norm([mu_next_est[0] - kf.x[i], mu_next_est[1] - kf.y[i]])) * (1/dist_traveled))
+      est_rot_errs.append((abs(mu_next_est[2] - kf.thetas[i]) * (1/dist_traveled)))
 
+      # Reset initial conditions
       mu_init = np.array([kf.x[i],kf.y[i],kf.thetas[i],kf.vels[i][0],kf.vels[i][1]])
       sig_init = np.identity(5)
       mu_next     =  mu_init
@@ -294,6 +300,7 @@ def compute_kf(dataset, sequence, model_name):
       sig_next = sig_init
       sig_next_est = sig_init
       dist_traveled = 0
+      curr_timestep = 0
 
   # Calculate average errors
   trans_err_avg = mean(trans_errs)
