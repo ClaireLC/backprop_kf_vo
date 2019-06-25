@@ -1,3 +1,9 @@
+"""
+Train Feed Forward CNN with KITTI dataset
+Args:
+--logdir: Log directory name (unique name for model)
+--load: Checkpoint path (if wanting to start training from checkpoint)
+"""
 import numpy as np
 import time
 from datetime import datetime
@@ -22,7 +28,6 @@ unique_logdir = args.logdir
 load_checkpoint_path = args.load
 # Will be updated in main() as a global
 logdir = ""
-
 
 # Dataset specifications
 SEQ_DIR = "/mnt/disks/dataset/dataset_post/sequences/"
