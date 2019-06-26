@@ -18,7 +18,7 @@ from matplotlib import pyplot as plt
 
 from models.feed_forward_cnn_model import FeedForwardCNN
 from models.kalmanfilter_model import KalmanFilter
-from kitti_dataset import KittiDataset
+from kitti_dataset import KittiDataset, ToTensor, SequenceSampler
 from kitti_dataset_seq import KittiDatasetSeq
 
 parser = argparse.ArgumentParser()
@@ -70,17 +70,26 @@ def infer(model_path, sequence_num, camera_num):
 
   # Create dataset
   seq_length = 100
-  seq_dataset = KittiDatasetSeq(SEQ_DIR, POSES_DIR, OXTS_DIR, seq_length, mode="infer")
+  #seq_dataset = KittiDatasetSeq(SEQ_DIR, POSES_DIR, OXTS_DIR, seq_length, mode="infer")
 
+  # Individual frames dataset
+  dataset = KittiDataset(SEQ_DIR, POSES_DIR, OXTS_DIR, transform=transforms.Compose([ToTensor()]), mode="infer")
   # Dataset sampler to get one sequence from specified camera
-  #sampler = SequenceSampler(sequence_num, camera_num)
-
+  sampler = SequenceSampler(sequence_num, camera_num)
   # Dataloader for sequence
-  seq_dataloader = DataLoader(
-                              dataset = seq_dataset,
+  dataloader = DataLoader(
+                              dataset = dataset,
                               batch_size = 1,
+                              sampler = sampler,
                               shuffle = False,
                               )
+
+  ## Dataloader for sequence
+  #seq_dataloader = DataLoader(
+  #                            dataset = seq_dataset,
+  #                            batch_size = 1,
+  #                            shuffle = False,
+  #                            )
 
   # Write csv header
   results_save_path = args.save + "/kitti_{}.txt".format(sequence_num)
@@ -91,62 +100,88 @@ def infer(model_path, sequence_num, camera_num):
   # Run inference for each sample in sequence
   losses = []
   errors = []
-  start_time = time.time()
+  #start_time = time.time()
 
-  for i, sample in enumerate(tqdm(seq_dataloader)):
+  # Get initial state of first frame in sequence
+  # (5)
+  init_sample = next(iter(dataloader))
+  mu0 = torch.cat([init_sample["pose"],init_sample["vel"]], 1).type('torch.FloatTensor').to(device) 
+  #μ0s = torch.cat([torch.stack(init_sample["pose"],1), torch.stack(init_sample["vel"],1)], 1).float().to(device) 
+  prev_time = init_sample["curr_time"].type('torch.FloatTensor').to(device)
+  print("Init state: {}".format(mu0))
+  print("Init time: {}".format(prev_time))
+  
+  mu = mu0
+  sig = torch.eye(5).to(device)
+
+  for i, sample in enumerate(tqdm(dataloader)):
+    # Skip frame 1
+    if i == 0:
+      continue
+
+    print("\nSample number {}".format(i))
+
     # Format data
-    # (T, N, 6, 50, 150)
-    images = torch.stack([sample[ii][0] for ii in range(len(sample))]).float().to(device)
-    # (T, N, 3)
-    positions = torch.stack([torch.stack(sample[ii][1][0:3],1) for ii in range(len(sample))]).float().to(device) #[x, y, theta] stacked
-    # (T, N,) sequence timestamps
-    times = torch.stack([sample[ii][2] for ii in range(len(sample))]).float().to(device)
+    # (N, 6, 50, 150)
+    image = torch.cat((sample["curr_im"], sample["diff_im"]), 1).type('torch.FloatTensor').to(device)
+    # (N, 3)
+    pose = sample["pose"].type('torch.FloatTensor').to(device)
+    #pose = torch.unsqueeze(sample["pose"],0).type('torch.FloatTensor').to(device)
+    # (T,)
+    curr_time = sample["curr_time"].type('torch.FloatTensor').to(device)
 
-    # (N, 5)
-    μ0s = torch.cat([torch.stack(sample[0][1][0:3],1), torch.stack(sample[0][1][3:5],1)], 1).float().to(device) 
+    # Create list of prev_time and curr_time to input into KFModel
+    times = torch.unsqueeze(torch.cat([prev_time, curr_time], 0),1).type('torch.FloatTensor').to(device)
+    print("times {}".format(times))
 
-    # Reshape images so everything can be processed in parallel by utilizing batch size 
-    T, N, H, W =  images.shape[0], images.shape[1], images.shape[3], images.shape[4]
-    no_seq_images = images.view(T * N, 6, H, W)
 
     # Forward pass
-    # output (T * N, dim_output)
-    vel_L_prediction = CNNModel(no_seq_images)
+    # output (N, dim_output)
+    vel_L_prediction = CNNModel(image)
     
-    #print("CNN predictions {}".format(vel_L_prediction[0]))
+    #print("CNN predictions {}".format(vel_L_prediction))
     #print("vels {}".format(vels[0][0]))
 
-    # Decompress the results into original images format
-    z_and_L_hat_list = vel_L_prediction.view(T, N, vel_L_prediction.shape[1])
+    # Add dimension to vel_L_prediction
+    vel_L_prediction = vel_L_prediction.view(1, 1, vel_L_prediction.shape[1])
 
     # Pass through KF
-    pose_prediction = KFModel(z_and_L_hat_list, μ0s, times)
+    mu, sig = KFModel(vel_L_prediction, mu, sig, prev_time, curr_time)
+    mu = torch.squeeze(mu,0)
+    sig = torch.squeeze(sig,0)
 
+    # Update prev_time
+    prev_time = curr_time
+
+    print("mu {}".format(mu))
+    pose_prediction = mu[:,0:3]
     pose_prediction_array = pose_prediction.data.cpu().numpy()[0]
-    positions_array = positions.data.cpu().numpy()[0]
+    pose_array = pose.data.cpu().numpy()[0]
 
-    loss = loss_function(pose_prediction, positions)
+    print(pose_prediction.shape, pose.shape)
+    loss = loss_function(pose_prediction, pose)
 
     # Record loss and error
     losses.append(loss.item())
 
-    print(pose_prediction[0:10], positions[0:10])
-    quit()
     # Compute and record error
-    error = torch.norm(y_actual-y_prediction)
+    error = torch.norm(pose - pose_prediction)
     errors.append(error.item())
 
-    #print("Actual: {} Prediction {}".format(y_actual.data.cpu().numpy()[0], y_prediction_array))
+    print("Actual: {} Prediction {}".format(pose_array, pose_prediction_array))
+
+    #if i == 100:
+    #  break
 
     # Save results to file
-    with open(results_save_path, mode="a+") as csv_id:
-      writer = csv.writer(csv_id, delimiter=",")
-      writer.writerow([y_prediction_array[0], y_prediction_array[1]])
+    #with open(results_save_path, mode="a+") as csv_id:
+    #  writer = csv.writer(csv_id, delimiter=",")
+    #  writer.writerow([y_prediction_array[0], y_prediction_array[1]])
 
   # Finish up
-  print('Elapsed time: {}'.format(time.time() - start_time))
-  print('Testing mean RMS error: {}'.format(np.mean(np.sqrt(losses))))
-  print('Testing std  RMS error: {}'.format(np.std(np.sqrt(losses))))
+  #print('Elapsed time: {}'.format(time.time() - start_time))
+  print('Testing mean RMS error: {}'.format(np.mean(np.sqrt(errors))))
+  print('Testing std  RMS error: {}'.format(np.std(np.sqrt(errors))))
 
 def main():
   traj_num = args.traj_num
