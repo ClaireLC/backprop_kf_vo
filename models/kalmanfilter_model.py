@@ -14,15 +14,6 @@ class KalmanFilter(nn.Module):
     super(KalmanFilter, self).__init__()
     self.device = device
   
-    # Jacobian of robot dynamics
-    #self.A = torch.tensor([[-b/m, 0.,   0., -k/m,   0.], 
-    #           [0., -b/m,   0.,   0., -k/m],
-    #           [1.,   0., -b/m,   0.,   0.],
-    #           [0.,   1.,   0.,   0.,   0.],
-    #           [0.,   0.,   1.,   0.,   0.]])
-    #self.A = (self.A*dt + torch.eye(5)).to(device)
-    #self.A.requires_grad = False
-
     # measurement = 2D position
     self.C = torch.tensor([[0., 0., 0., 1., 0.],
                [0., 0., 0., 0., 1.]]).to(device)
@@ -71,6 +62,12 @@ class KalmanFilter(nn.Module):
     v     = μ[:,3] #(N,)
 
     A = torch.zeros((N,5,5)).to(self.device)
+    A[:,0,0] = 1
+    A[:,1,1] = 1
+    A[:,2,2] = 1
+    A[:,3,3] = 1
+    A[:,4,4] = 1
+
     A[:,0,2] = -1 * v * torch.sin(theta) * dt
     A[:,0,3] = torch.cos(theta) * dt
     A[:,1,2] = v * torch.cos(theta) * dt
@@ -142,6 +139,7 @@ class KalmanFilter(nn.Module):
 
     # mu is (N, 5, 1)
     μ_predicted = self.update_mu(μ_input, dt).unsqueeze(-1)
+    #print("mu pred: {}".format(μ_predicted))
 
     # (N, 5, 5) + (5, 5) = (N, 5, 5) tensor
     Σ_predicted = A @ Σ_input @ A.permute(0, 2, 1) + self.Q
@@ -152,37 +150,42 @@ class KalmanFilter(nn.Module):
     K = Σ_predicted @ C.permute(0,2,1) @ (C @ Σ_predicted @ C.permute(0,2,1) + R).inverse() # (N, 5, 2) tensor
 
     μ_output = (μ_predicted + K @ (z.unsqueeze(-1) - C @ μ_predicted)).squeeze(-1) # (N, 5) tensor
+    #print("mu out: {}".format(μ_output))
     Σ_output = (torch.eye(5).to(self.device) - K @ C) @ Σ_predicted # (N, 5, 5) tensor
 
     return (μ_output, Σ_output)
   
 
-  def forward(self, z_and_L_hat_list, μ0, times):
+  def forward(self, z_and_L_hat_list, μ0, sig, t0, times):
     # L_hat: (T, N, 3) tensor
     # z_and_L_hat_list: [(N, 5) tensor, ...] of length T
     # μ0: (N, 5) tensor
-    # times: (T, N,) tensor
+    # sig: (N, 5, 5) tensor
+    # t0: (N,) tensor of intial timestamps of each inital mu in sequences
+    # times: (T, N,) tensor of timestamps of each frame in sequences
 
     # μs_output: (T, N, 5) tensor
-    # Σs_output: (T, N, 4, 4) tensor
-    # y_hats_output: (T, N, 2) tensor
+    # Σs_output: (T, N, T, T) tensor
+    # y_hats_output: (T, N, 3) tensor
     T = len(z_and_L_hat_list)
+  
+    #print("z and L: {}".format(z_and_L_hat_list))
+    #print("T: {}".format(T))
 
     μs = [μ0]
-    Σs = [self.Σ0]
+    Σs = [sig]
     y_hats = []
+    prev_times = t0
 
-    prev_times= times[0,:]
     for t in range(T):
-      # μ_output: (N, 5) tensor
-      # Σ_output: (N, 5, 5) tensor
-      
       # z: (N, 2) tensor
       # L_hat: (N, 3) tensor
       z_and_L_hat = z_and_L_hat_list[t]
       z = z_and_L_hat[:, 0:2]
       L_hat = z_and_L_hat[:, 2:5]
+      #print(times[t], prev_times)
       dt = times[t] - prev_times
+      #print("dt: {}".format(dt))
       prev_times = times[t]
       (μ_output, Σ_output) = self.kf_update(μs[-1], Σs[-1], z, dt, L_hat)
       
@@ -190,12 +193,19 @@ class KalmanFilter(nn.Module):
       y_hat = (self.Cy @ μ_output.unsqueeze(-1)).squeeze(-1)
       μs.append(μ_output)
       Σs.append(Σ_output)
+      #print("mu {}".format(μs))
+      #print("sig {}".format(Σs))
+      #if t == 1:
+      #  quit()
       y_hats.append(y_hat)
 
     μs.pop(0)
     Σs.pop(0)
     μs_output = torch.stack(μs, 0)
     Σs_output = torch.stack(Σs, 0)
+    #print(μs_output.shape)
+    #print(Σs_output.shape)
     y_hats_output = torch.stack(y_hats, 0)
     
-    return y_hats_output
+    #return y_hats_output
+    return μs_output, Σs_output
