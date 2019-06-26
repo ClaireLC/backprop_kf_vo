@@ -27,7 +27,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # Global parameters
 batch_size = 20
-epochs = 100
+epochs = 150
 
 seq_length = 100
 
@@ -44,21 +44,25 @@ def predict(CNNModel, KFModel, sample_batched, loss_function):
   # 3 because each sample is a tuple (image, state, time)
 
   # Format data
-  # (T, N, 6, 50, 150)
-  images = torch.stack([sample_batched[ii][0] for ii in range(len(sample_batched))]).float().to(device)
+  # Images in sequence, not including image 0 (T-1, N, 6, 50, 150)
+  images = torch.stack([sample_batched[ii][0] for ii in range(1, len(sample_batched))]).float().to(device)
 
   # make the column order (pose, velocities)
   # (N, 5)
   μ0s = torch.cat([torch.stack(sample_batched[0][1][0:3],1), torch.stack(sample_batched[0][1][3:5],1)], 1).float().to(device) 
+  # initial times (N,)
+  t0 = torch.stack([sample_batched[0][2]]).float().to(device)
+
+  sig = torch.eye(5).to(device)
 
   # (T, N, 3)
-  positions = torch.stack([torch.stack(sample_batched[ii][1][0:3],1) for ii in range(len(sample_batched))]).float().to(device) #[x, y, theta] stacked
+  positions = torch.stack([torch.stack(sample_batched[ii][1][0:3],1) for ii in range(1, len(sample_batched))]).float().to(device) #[x, y, theta] stacked
 
   # (T, N, 2)
-  vels = torch.stack([torch.stack(sample_batched[ii][1][3:5],1) for ii in range(len(sample_batched))]).float().to(device) #[x, y, theta] stacked
+  vels = torch.stack([torch.stack(sample_batched[ii][1][3:5],1) for ii in range(1, len(sample_batched))]).float().to(device) #[x, y, theta] stacked
 
   # (T, N,) sequence timestamps
-  times = torch.stack([sample_batched[ii][2] for ii in range(len(sample_batched))]).float().to(device)
+  times = torch.stack([sample_batched[ii][2] for ii in range(1, len(sample_batched))]).float().to(device)
 
   # Reshape images so everything can be processed in parallel by utilizing batch size 
   T, N, H, W =  images.shape[0], images.shape[1], images.shape[3], images.shape[4]
@@ -67,26 +71,30 @@ def predict(CNNModel, KFModel, sample_batched, loss_function):
   # Forward pass
   # output (T * N, dim_output)
   vel_L_prediction = CNNModel(no_seq_images)
-  
-  #print("CNN predictions {}".format(vel_L_prediction[0]))
-  #print("vels {}".format(vels[0][0]))
 
   # Decompress the results into original images format
   z_and_L_hat_list = vel_L_prediction.view(T, N, vel_L_prediction.shape[1])
 
   # Pass through KF
-  pose_prediction = KFModel(z_and_L_hat_list, μ0s, times)
-  #print("pose prediction {}".format(pose_prediction[0][0]))
-  #print("pose prediction {}".format(pose_prediction[1][0]))
-  #print("pose prediction {}".format(pose_prediction[2][0]))
-  #print(pose_prediction.shape)
+  state_prediction, sig = KFModel(z_and_L_hat_list, μ0s, sig, t0, times)
+
+  # Extract pose prediction  from state_prediction (first 3 elements)
+  pose_prediction = state_prediction[:,:,0:3]
 
   # Compute loss
-  #print("position {}".format(positions[0][0]))
-  #print("position {}".format(positions[1][0]))
-  #print("position {}".format(positions[2][0]))
-  #print(positions.shape)
   loss = loss_function(pose_prediction, positions)
+
+  #print("init mu: {}".format(μ0s))
+  #print("init time: {}".format(t0))
+  #print("first positions: {}".format(positions[0:5,:,:]))
+  #print("first times: {}".format(times[0:5,:]))
+  #print("first vel predictions: {}".format(vel_L_prediction[0:5,:]))
+  #print("first vel actual: {}".format(vels[0:5,:,:]))
+  #print("z and L hat list: {}".format(vels[0:5,:,:]))
+  #print("state pred: {}".format(state_prediction[0:5,:,:]))
+  #print("loss: {}".format(loss))
+  #
+  #quit()
   
   return loss, positions, pose_prediction
 
@@ -111,11 +119,23 @@ def train_model(CNNModel, KFModel, optimizer, loss_function, lr=1e-4, starting_e
   loss_file = 'log/' + start_time_str + '_lr_' + lr_str + '_loss.txt'
   val_loss_file = 'log/' + start_time_str + '_lr_' + lr_str + '_val_loss.txt'
 
-  # Load pre-trained feed forward CNN weights
+  # Load pre-trained feed forward weights for just conv layers
   print("Loading pretrained CNN weights from {}".format(CNN_NAME))
-  if starting_epoch >= 0:
+  if starting_epoch < 0:
     checkpoint_path = CNN_DIR + CNN_NAME
     checkpoint = torch.load(checkpoint_path)
+
+    # Change dimensions of last fully connected layer to be output dim 5
+    # initialize weights from uniform random distribution
+    old_fc_weight = checkpoint['model_state_dict']['model.18.weight']
+    old_fc_bias = checkpoint['model_state_dict']['model.18.bias']
+    #new_fc_weight = torch.nn.init.uniform_(torch.zeros([3,128]), -0.2, 0.2).to(device)
+    #new_fc_bias = torch.nn.init.uniform_(torch.zeros([3]), -0.2, 0.2).to(device)
+    new_fc_weight = torch.zeros([3,128]).to(device)
+    new_fc_bias = torch.zeros([3]).to(device)
+    checkpoint['model_state_dict']['model.18.weight'] = torch.cat([old_fc_weight, new_fc_weight], 0).to(device)
+    checkpoint['model_state_dict']['model.18.bias'] = torch.cat([old_fc_bias, new_fc_bias], 0).to(device)
+    
     CNNModel.load_state_dict(checkpoint['model_state_dict'])
     #optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
 
