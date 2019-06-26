@@ -95,7 +95,7 @@ def infer(model_path, sequence_num, camera_num):
   results_save_path = args.save + "/kitti_{}.txt".format(sequence_num)
   with open(results_save_path, mode="a+") as csv_id:
     writer = csv.writer(csv_id, delimiter=",")
-    writer.writerow(["predicted x", "predicted y", "predicted theta"])
+    writer.writerow(["predicted_x", "predicted_y", "predicted_theta"])
 
   # Run inference for each sample in sequence
   losses = []
@@ -174,9 +174,9 @@ def infer(model_path, sequence_num, camera_num):
     #  break
 
     # Save results to file
-    #with open(results_save_path, mode="a+") as csv_id:
-    #  writer = csv.writer(csv_id, delimiter=",")
-    #  writer.writerow([y_prediction_array[0], y_prediction_array[1]])
+    with open(results_save_path, mode="a+") as csv_id:
+      writer = csv.writer(csv_id, delimiter=",")
+      writer.writerow([pose_prediction_array[0], pose_prediction_array[1], pose_prediction_array[2]])
 
   # Finish up
   #print('Elapsed time: {}'.format(time.time() - start_time))
