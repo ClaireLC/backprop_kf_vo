@@ -4,14 +4,14 @@ Implementation of backprop kf (Haarnoja, et al) using PyTorch for visual odometr
 ## Descriptions of files and directories in this repository
 
 ### Data preprocessing scripts for KITTI and Ouija trajectories
-The `preprocessing/` directory contains scripts for preprocessing data.
+The `preprocessing/` directory contains scripts for preprocessing data. 
 
-#### KITTI
+#### KITTI preprocessing
 
 * `preprocess_sequences.py` 
 Resizes KITTI images and computes difference images.
 
-#### Ouijabot
+#### Ouijabot preprocessing
 
 These scripts preprocess Ouija trajectories that are saved as rosbags for testing. Not needed for real-time inference.
 
