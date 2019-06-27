@@ -2,9 +2,9 @@ import numpy as np
 import csv
 from scipy.spatial.transform import Rotation as R
 
-class processOuijaData():
+class ouijaOptitrack():
   """ 
-  Processing Ouijabot raw data
+  Processing Ouijabot raw data from optitrack
   """
   def __init__(self, file_path):
     """
@@ -46,7 +46,25 @@ class processOuijaData():
         self.vels.append((vel_x,vel_y,vel_z))
         self.quats.append((qx,qy,qz,qw))
   
+  def get_times(self):
+    """
+    Returns list of timestamps
+    """
+    return self.times
  
+  def get_xy(self):
+    """
+    Returns lists of x and y coordinates
+    """
+    x = []
+    y = []
+
+    for coord in self.positions:
+      x.append(coord[0]) 
+      y.append(coord[1]) 
+
+    return x,y
+
   def get_theta(self):
     """
     Calculates angle of robot in mocap world frame
