@@ -18,6 +18,7 @@ class KittiDataset(Dataset):
     "diff_img": difference image,
     "pose": 4x4 transformation matrix,
     "vel": [forward velocity, angular velocity]
+    "curr_time": current timestamp
     }
   """
 
