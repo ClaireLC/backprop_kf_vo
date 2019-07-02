@@ -23,11 +23,11 @@ def get_poses(traj_num_str):
       x.append(row[x_ind])
       y.append(row[y_ind])
 
-  # Get theta from pose transformation matrix
-  if np.arcsin(row[0]) > 0:
-    theta.append(np.arccos(row[0]) + np.pi/2)
-  else:
-    theta.append(np.arccos(row[0]) * -1 + np.pi/2)
+      # Get theta from pose transformation matrix
+      if np.arcsin(row[0]) > 0:
+        theta.append(np.arccos(row[0]) + np.pi/2)
+      else:
+        theta.append(np.arccos(row[0]) * -1 + np.pi/2)
 
   return x, y, theta
 
