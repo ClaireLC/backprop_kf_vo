@@ -1,102 +1,24 @@
+"""
+Extended kalman filter class for KITTI/ouija dynamics model
+Performs kalman filter update
+"""
 import numpy as np
 from numpy.linalg import inv
-import matplotlib.pyplot as plt
-import plot_seq
-import csv
-import argparse
 from statistics import mean
-import os
-
-from preprocessing.process_ouija_data import processOuijaData
 
 class KF():
 
-  def __init__(self, dataset, sequence, model_name):
-    # Load data
-    self.x = [] # Ground truth x position
-    self.y = [] # Ground truth y position
-    self.vels = [] # Ground truth velocity tuples (forward, angular)
-    self.thetas = [] # Ground truth angles
-    self.times = [] # Timestamps
-    self.vel_hat = [] # Inferred velocity tuples (forward, angular)
-    self.opti_vels = [] # Optitrack velocities (forward, angular)
+  def __init__(self):
+    self.C = np.array([[0, 0, 0, 1, 0], [0, 0, 0, 0, 1]])
   
+    # Covariance matrices
+    self.R = np.identity(5) * 1e10 # Process noise
+    self.Q = np.identity(2) * 1e10 # Observation noise
 
-    if dataset == "kitti":
-      # Open ground truth pose file
-      # Save x,y,theta into lists
-      file_path = "./dataset/poses/" + str(sequence).zfill(2) + ".txt"
-      x_ind = 3
-      y_ind = 11
-      with open(file_path, "r") as fid:
-        for i, line in enumerate(fid):
-          row = [float(s) for s in line.split(" ")]
-          self.x.append(row[x_ind])
-          self.y.append(row[y_ind])
-          if np.arcsin(row[0]) > 0:
-            self.thetas.append(np.arccos(row[0]) + np.pi/2)
-          else:
-            self.thetas.append(np.arccos(row[0]) * -1 + np.pi/2)
-      
-      # Get timestamps of sequence
-      times_file_path = "./dataset/" + str(sequence).zfill(2) + "/times.txt"
-      with open(times_file_path, "r") as fid:
-        for i, line in enumerate(fid):
-          self.times.append(float(line))
-
-      # Get oxts data
-      oxts_dir = "./dataset/" + str(sequence).zfill(2) + "/data/"
-      for i in range(len(self.times)):
-        oxts_file_path = oxts_dir + str(i).zfill(10) + ".txt"
-        fid = open(oxts_file_path) 
-        line = fid.readlines()
-        oxts_data = [float(s) for s in line[0].split(" ")]
-        for_vel = oxts_data[8]
-        ang_vel = oxts_data[19]
-        self.vels.append(np.asarray([for_vel,ang_vel]))
-
-      # Get inferred velocities from cnn result txt files
-      path = "./cnn_results/" + model_name + "/kitti_" + str(sequence) + ".txt"
-      with open(path, mode="r") as csv_fid:
-        reader = csv.reader(csv_fid, delimiter=",")
-        for i, row in enumerate(reader):
-          if i != 0:
-            self.vel_hat.append([float(row[0]),float(row[1])])
-      
-    if dataset == "ouija":
-      # Get ground truth data
-      file_path = "../test_traj_" + str(sequence).zfill(1) + "/data.txt"
-      time_ind = 0
-      x_ind = 1
-      y_ind = 2
-      x_vel_ind = 8
-      theta_vel_ind = 10
-      with open(file_path, "r") as fid:
-        reader = csv.reader(fid, delimiter=",")
-        next(reader)
-        for row in reader:
-          self.x.append(float(row[x_ind]))
-          self.y.append(float(row[y_ind]))
-          self.vels.append((float(row[x_vel_ind]),float(row[theta_vel_ind])))
-          self.times.append(float(row[time_ind])) 
-
-      # Get forward and angular velocities from Optitrack data, and thetas
-      data_processor = processOuijaData(file_path)
-      self.opti_vels = data_processor.get_vels()
-      self.thetas = data_processor.get_theta()
-
-      # Get inferred velocities from cnn result txt files
-      path = "../test_traj_" + str(sequence).zfill(1) + "/results.txt"
-      with open(path, mode="r") as csv_fid:
-        reader = csv.reader(csv_fid, delimiter=",")
-        next(reader)
-        for i, row in enumerate(reader):
-            #vel_hat.append([float(row[0]), 1*float(row[1])])
-            self.vel_hat.append([(float(row[0])-7)/5, 1*float(row[1])])
-
-
-  # Calculating the A matrix given current state
-  def A_calc(self, x, y, theta, v, omega, dt, dataset):
+  def A_calc(self, x, y, theta, v, omega, dt):
+    """
+    Calculating the A matrix given current state
+    """
     # Initialize 5x5 A matrix
     A = np.zeros((5,5))
     A[0,0] = 1
@@ -105,24 +27,18 @@ class KF():
     A[3,3] = 1
     A[4,4] = 1
   
-    if dataset == "kitti":
-      A[0,2] = -1 * v * np.sin(theta) * dt
-      A[0,3] = np.cos(theta) * dt
-      A[1,2] = v * np.cos(theta) * dt
-      A[1,3] = np.sin(theta) * dt
-      A[2,4] = dt
-    elif dataset == "ouija":
-      A[0,2] = -1 * v * np.sin(theta) * dt
-      A[0,3] = np.cos(theta) * dt
-      A[1,2] = v * np.cos(theta) * dt
-      A[1,3] = np.sin(theta) * dt
-      A[2,4] = dt
+    A[0,2] = -1 * v * np.sin(theta) * dt
+    A[0,3] = np.cos(theta) * dt
+    A[1,2] = v * np.cos(theta) * dt
+    A[1,3] = np.sin(theta) * dt
+    A[2,4] = dt
   
     return(A)
-  
 
-  # Update state estimate with dynamics equations
   def update_mu(self, mu, dt):
+    """
+    Update state estimate with dynamics equations
+    """
     x = mu[0]
     y = mu[1]
     theta = mu[2]
@@ -138,9 +54,14 @@ class KF():
     
     return mu_next
     
-
-  # Kalman Filter update step
-  def kf_step(self, mu, sig, z, dt, dataset):
+  def step(self, mu, sig, z, dt):
+    """
+    One update step of EKF
+    mu: 5-dimension state (x,y,theta,v,omega)
+    sig: 5x5 covariance matrix
+    z: 2-dimension observation (for_vel, ang_vel)
+    dt: time different between current and previous steps
+    """
     # Parse state 
     x = mu[0]
     y = mu[1]
@@ -148,234 +69,13 @@ class KF():
     v = mu[3]
     omega = mu[4]
   
-    A = self.A_calc(x,y,theta,v,omega,dt, dataset)
-    C = np.array([[0, 0, 0, 1, 0], [0, 0, 0, 0, 1]])
-  
-    # Covariance matrices
-    R = np.identity(5) * 1e10 # State transition uncertainty
-    Q = np.identity(2) * 1e10 # Measurement uncertainty
+    A = self.A_calc(x,y,theta,v,omega,dt)
   
     # Update
     mu_next_p = self.update_mu(mu,dt)
-    sig_next_p = A @ sig @ A.transpose() + R
-    K = sig_next_p @ C.transpose() @ inv(C @ sig_next_p @ C.transpose() + Q)
-    mu_next = mu_next_p + K @ (z - C @ mu_next_p)
-    sig_next = (np.identity(5) - K @ C) @ sig_next_p
+    sig_next_p = A @ sig @ A.transpose() + self.R
+    K = sig_next_p @ self.C.T @ inv(self.C @ sig_next_p @ self.C.T + self.Q)
+    mu_next = mu_next_p + K @ (z - self.C @ mu_next_p)
+    sig_next = (np.identity(5) - K @ self.C) @ sig_next_p
     return mu_next, sig_next
 
-
-def compute_kf(dataset, sequence, model_name):
-  kf = KF(dataset, sequence, model_name)
-
-  # Number of timesteps to calculate
-  MAX = len(kf.vel_hat)
-
-  # Initial conditions
-  prev_time = kf.times[0]
-  mu_init = np.array([kf.x[0],kf.y[0],kf.thetas[0],kf.vels[0][0],kf.vels[0][1]])
-  sig_init = np.identity(5)
-  mu_next     =  mu_init
-  mu_next_est =  mu_init
-  sig_next = sig_init
-  sig_next_est = sig_init
-
-  # Lists to save results for plotting
-  x_list = []
-  y_list = []
-  theta_list = []
-
-  # KF with inferred velocities
-  x_list_est = []
-  y_list_est = []
-  theta_list_est = []
-
-  sigmas = []
-  indexes = []
-
-  ############################ Filter loops  ####################################
-  for i in range(1, MAX):
-    #print("\n Iteration {}".format(i))
-    curr_time = kf.times[i]
-    dt = curr_time - prev_time
-    prev_time = curr_time
-
-    # Observed velocities
-    if dataset == "kitti":
-      z_true = kf.vels[i] # z from joy data / oxts
-    elif dataset == "ouija":
-      z_true = kf.opti_vels[i] # z from optitrack data
-
-    # Run filter with ground truth velocities
-    mu_next, sig_next = kf.kf_step(mu_next, sig_next, z_true, dt, dataset)
-    x_list.append(mu_next[0])
-    y_list.append(mu_next[1])
-    theta_list.append(mu_next[2])
-    #sigmas.append(np.trace(sig_next))
-    #indexes.append(i)
-    #print("Ground truth x {} y {} theta {} velocities {}".format(x[i],y[i],theta[i] + np.pi/2, z))
-
-    # Run filter with inferred velocities
-    z_est = kf.vel_hat[i]
-    mu_next_est, sig_next_est = kf.kf_step(mu_next_est, sig_next_est, z_est, dt, dataset)
-    x_list_est.append(mu_next_est[0])
-    y_list_est.append(mu_next_est[1])
-    theta_list_est.append(mu_next_est[2])
-
-  ################################ Calculate error  #####################################
-  prev_time = kf.times[0]
-  mu_next     =  mu_init
-  mu_next_est =  mu_init
-  sig_next = sig_init
-  sig_next_est = sig_init
-
-  # Error calc parameters
-  segment_length = 100
-  segment_timesteps = 100
-  err_file_dir = "./traj_error"
-  err_file_name = "{}/{}_{}.txt".format(err_file_dir, model_name, segment_length)
-    
-  # Check if directory exists, or make one
-  if not os.path.isdir(err_file_dir):
-    os.mkdir(err_file_dir)
-
-  # Write error heading to csv if there is no file yet
-  if not os.path.isfile(err_file_name):
-    with open (err_file_name, mode="a+") as fid:
-      writer = csv.writer(fid, delimiter=",")
-      writer.writerow(["seq num", "true vel trans err", "true vel rot err", "infer vel trans err", "infer vel rot err"])
-
-  dist_traveled = 0
-  curr_timestep = 0
-  
-  trans_errs = []
-  rot_errs = []
-  est_trans_errs = []
-  est_rot_errs = []
-
-  for i in range(1, MAX):
-    #print("\n Iteration {}".format(i))
-    curr_time = kf.times[i]
-    dt = curr_time - prev_time
-    prev_time = curr_time
-
-    # Calculate distance traveled since last error calc
-    dist = np.linalg.norm([kf.x[i] - kf.x[i-1], kf.y[i] - kf.y[i-1]])
-    dist_traveled += dist
-
-    # Update curr_timestep
-    curr_timestep += 1
-
-    # Observed velocities
-    if dataset == "kitti":
-      z_true = kf.vels[i] # z from joy data / oxts
-    elif dataset == "ouija":
-      z_true = kf.opti_vels[i] # z from optitrack data
-
-    # Run filter with ground truth velocities
-    mu_next, sig_next = kf.kf_step(mu_next, sig_next, z_true, dt, dataset)
-
-    # Run filter with inferred velocities
-    z_est = kf.vel_hat[i]
-    mu_next_est, sig_next_est = kf.kf_step(mu_next_est, sig_next_est, z_est, dt, dataset)
-
-    # If segment_length distance has been traveled since last reset
-    # Calculate translational and rotational error
-    # Reset initial conditions to ground truth
-    if curr_timestep >= segment_timesteps :
-    #if dist_traveled >= segment_length:
-      # Calculate translational error
-      # Filter with ground truth velocities
-      trans_errs.append(np.linalg.norm([mu_next[0] - kf.x[i], mu_next[1] - kf.y[i]]) * (1/dist_traveled))
-      rot_errs.append(abs(mu_next[2] - kf.thetas[i]) * (1/dist_traveled))
-
-      # Filter with inferred velocities
-      est_trans_errs.append((np.linalg.norm([mu_next_est[0] - kf.x[i], mu_next_est[1] - kf.y[i]])) * (1/dist_traveled))
-      est_rot_errs.append((abs(mu_next_est[2] - kf.thetas[i]) * (1/dist_traveled)))
-
-      # Reset initial conditions
-      mu_init = np.array([kf.x[i],kf.y[i],kf.thetas[i],kf.vels[i][0],kf.vels[i][1]])
-      sig_init = np.identity(5)
-      mu_next     =  mu_init
-      mu_next_est =  mu_init
-      sig_next = sig_init
-      sig_next_est = sig_init
-      dist_traveled = 0
-      curr_timestep = 0
-
-  # Calculate average errors
-  trans_err_avg = mean(trans_errs)
-  rot_err_avg = mean(rot_errs)
-  est_trans_err_avg = mean(est_trans_errs)
-  est_rot_err_avg = mean(est_rot_errs)
-
-  print("Average filter error")
-  print("using true velocities: translational {} rotational {}".format(trans_err_avg, rot_err_avg))
-  print("using inferred velocities: translational {} rotational {}".format(est_trans_err_avg, est_rot_err_avg))
-
-  # Write error to csv
-  with open (err_file_name, mode="a+") as fid:
-    writer = csv.writer(fid, delimiter=",")
-    writer.writerow([sequence, trans_err_avg, rot_err_avg, est_trans_err_avg, est_rot_err_avg])
-
-  return kf, MAX, x_list, y_list, x_list_est, y_list_est
-
-
-def plot_kf(plt, plt_idx, sequence, kf, MAX, x_list, y_list, x_list_est, y_list_est):
-  plt.subplot(1, 2, plt_idx)
-
-  # If dataset is ouija, switch x and y to match mocap frame
-  if dataset == "kitti":
-    line_true = plt.plot(kf.x[0:MAX], kf.y[0:MAX], label="Actual")
-    line_kf_true = plt.plot(x_list, y_list, label="KF using true vels")
-    line_kf_est = plt.plot(x_list_est, y_list_est, label="KF using inferred vels")
-    plt.ylabel("y (m)")
-    plt.xlabel("x (m)")
-  elif dataset == "ouija":
-    line_true = plt.plot(kf.y[0:MAX], kf.x[0:MAX], label="Actual")
-    line_kf_true = plt.plot(y_list, x_list, label="KF using true vels")
-    line_kf_est = plt.plot(y_list_est, x_list_est, label="KF using inferred vels")
-    plt.xlim(5, -5)
-    plt.axis("equal")
-    plt.ylabel("x in mocap frame (m)")
-    plt.xlabel("y in mocap frame (m)")
-
-  plt.setp(line_kf_est, color='b', ls='-', marker='.')
-  plt.setp(line_true, color='r', ls='-', marker='.')
-  plt.setp(line_kf_true, color='g', ls='-', marker='.')
-
-  plt.legend()
-  plt.title("{} Trajectory {} \non {}".format(dataset, sequence, model_name[plt_idx - 1]))
-  
-
-def main(dataset, traj_num, model_name):
-  print("Kalman filter")
-
-  for sequence in traj_num:
-    data = []
-    plt.figure(figsize=(5 * len(model_name), 5))
-    for plt_idx in range(len(model_name)):
-      data = compute_kf(dataset, sequence, model_name[plt_idx])
-      plot_kf(plt, plt_idx + 1, sequence, *data) 
-    plt.show(block=False)
-
-    if args.save_plot:
-      # Save plot
-      os.makedirs("figs/", exist_ok=True)
-      fig_name = "./figs/{}_{}_traj_est.png".format(dataset, sequence)
-      plt.savefig(fig_name, format="png")
-
-  plt.show()
-
-
-if __name__ == "__main__":
-  parser = argparse.ArgumentParser()
-  parser.add_argument("--dataset", default='kitti', help="dataset type", choices=["ouija", "kitti"])
-  parser.add_argument("--traj_num", nargs='+', help="trajectory number. Can be multiple separated with space")
-  parser.add_argument("--model_name", nargs='+', help="name of model. Can be multiple separated with space")
-  parser.add_argument("--save_plot", default=False, type=bool, help="Saves plot if set to True")
-  args = parser.parse_args()
-  dataset = args.dataset
-  traj_num = args.traj_num
-  model_name = args.model_name
-
-  main(dataset, traj_num, model_name)
