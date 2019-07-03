@@ -8,7 +8,7 @@ import argparse
 import matplotlib.pyplot as plt
 import os
 
-def plot_traj(trajectories_dict, dataset, traj_num, save_plot):
+def plot_traj(trajectories_dict, dataset, traj_num, model_name, save_plot):
   """
   Plot trajectories in trajectories_dict
   If plotting ouija, switch x and y to match mocap frame
@@ -42,11 +42,11 @@ def plot_traj(trajectories_dict, dataset, traj_num, save_plot):
 
   if save_plot:
       # Save plot
-      os.makedirs("figs/", exist_ok=True)
-      fig_name = "./figs/{}_{}_{}_traj.png".format(model_name, dataset_type, traj_num)
+      os.makedirs("./figs/{}".format(model_name), exist_ok=True)
+      fig_name = "./figs/{}/{}_{}_traj.png".format(model_name, dataset, traj_num)
       plt.savefig(fig_name, format="png")
 
-def plot_vel(vels_dict, dataset, traj_num, save_plot):
+def plot_vel(vels_dict, dataset, traj_num, model_name, save_plot):
   """
   Plot forward and angular velocities in vels_dict
   in two side-by-side plots 
@@ -81,7 +81,7 @@ def plot_vel(vels_dict, dataset, traj_num, save_plot):
 
   if save_plot:
       # Save plot
-      os.makedirs("figs/", exist_ok=True)
-      fig_name = "./figs/{}_{}_{}_vel.png".format(model_name, dataset_type, traj_num)
+      os.makedirs("./figs/{}".format(model_name), exist_ok=True)
+      fig_name = "./figs/{}/{}_{}_vel.png".format(model_name, dataset_type, traj_num)
       plt.savefig(fig_name, format="png")
 
