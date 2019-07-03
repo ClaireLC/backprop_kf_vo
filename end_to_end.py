@@ -25,6 +25,7 @@ dataset = args.dataset
 traj_nums = args.traj_num
 model_name = args.model_name
 model_name = model_name[0]
+save_plot = args.save_plot
 
 def get_ground_truth(dataset, traj_num_str):
   """
@@ -53,6 +54,9 @@ def get_ground_truth(dataset, traj_num_str):
   return x, y
 
 def get_inferred(dataset, traj_num_str):
+  """
+  Get inferred poses from cnn_results directory
+  """
   x_inf = [] # Inferred forward velocity
   y_inf = [] # Inferred angular velocity 
   if dataset == "kitti":
@@ -84,7 +88,8 @@ def main(dataset, traj_nums, model_name):
                                   "color": "b",
                                 },
                 }
-    plot_results.plot_traj(traj_dict, dataset, traj_num_str, False)
+    plot_results.plot_traj(traj_dict, dataset, traj_num_str, model_name, save_plot)
+    plt.show(block=False)
   plt.show()
 
 if __name__ == "__main__":
