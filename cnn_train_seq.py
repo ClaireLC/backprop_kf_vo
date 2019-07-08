@@ -11,6 +11,14 @@ from kitti_dataset import KittiDataset, SubsetSampler
 from kitti_dataset_seq import KittiDatasetSeq
 from models.feed_forward_cnn_model import FeedForwardCNN
 from models.kalmanfilter_model import KalmanFilter
+import argparse
+import os
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--load', dest='load', default=None, help='Directory of model checkpoint to load')
+
+args = parser.parse_args()
+checkpoint_dir = args.load
 
 # Dataset specifications
 SEQ_DIR = "/mnt/disks/dataset/dataset_post/sequences/"
@@ -21,6 +29,9 @@ SAVE_DIR = "/mnt/disks/dataset/"
 # Pretrained weights path
 CNN_DIR = "/home/clairech/backprop_kf_vo/log/cnnForwardPass/"
 CNN_NAME = "2019-05-24_11_24_1.00e-04_bestloss_feed_forward.tar"
+
+# LOG DIRECTORY
+LOG_DIR = "./log/"
 
 # Device specification
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -98,8 +109,8 @@ def predict(CNNModel, KFModel, sample_batched, loss_function):
   
   return loss, positions, pose_prediction
 
-def train_model(CNNModel, KFModel, optimizer, loss_function, lr=1e-4, starting_epoch=-1, model_id=None,
-  train_dataloader=None, val_dataloader=None):
+def train_model(CNNModel, KFModel, optimizer, loss_function, lr=1e-4, starting_epoch=-1,
+  train_dataloader=None, val_dataloader=None, checkpoint_dir=None):
   """
     starting_epoch: the epoch to start training. If -1, this means we
                     start training model from scratch.
@@ -108,36 +119,56 @@ def train_model(CNNModel, KFModel, optimizer, loss_function, lr=1e-4, starting_e
   lr_str = "{0:.2e}".format(lr)
   print("Training feed forward CNN with lr =", lr_str)
 
-  # Create loss_file name using starting time to log training process
-  if starting_epoch >= 0:
-    start_time = model_id
+  start_time = time.time()
+  start_time_str = datetime.utcfromtimestamp(start_time).strftime('%Y-%m-%d_%H_%M')
+
+  # If a checkpoint path is specified, load model
+  if checkpoint_dir:
+    checkpoint_fname = checkpoint_dir + "best_loss.tar"
+    print("Loading checkpoint {}".format(checkpoint_fname))
+    checkpoint = torch.load(checkpoint_fname)
+    CNNModel.load_state_dict(checkpoint['cnn_model_state_dict'])
+    KFModel.load_state_dict(checkpoint['kf_model_state_dict'])
+    optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+    epoch = checkpoint["epoch"]
+    loss = checkpoint["loss"]
+    print("Epoch {}: Loss {}".format(epoch, loss))
+    starting_epoch = epoch
   else:
-    start_time = time.time()
-    start_time_str = datetime.utcfromtimestamp(start_time).strftime('%Y-%m-%d_%H_%M')
+    # Set model name with unique start time
+    model_name = "e2e_" + start_time_str + "_lr." + lr_str
+    checkpoint_dir = LOG_DIR + model_name + "/"
 
-  # Logs all files
-  loss_file = 'log/' + start_time_str + '_lr_' + lr_str + '_loss.txt'
-  val_loss_file = 'log/' + start_time_str + '_lr_' + lr_str + '_val_loss.txt'
+    print("Training new model named: {}".format(model_name))
 
-  # Load pre-trained feed forward weights for just conv layers
-  print("Loading pretrained CNN weights from {}".format(CNN_NAME))
-  if starting_epoch < 0:
-    checkpoint_path = CNN_DIR + CNN_NAME
-    checkpoint = torch.load(checkpoint_path)
+    starting_epoch = -1
+    # Load pre-trained feed forward weights for just conv layers
+    print("Loading pretrained CNN weights from {}".format(CNN_NAME))
+    if starting_epoch < 0:
+      cnn_weights_path = CNN_DIR + CNN_NAME
+      checkpoint = torch.load(cnn_weights_path)
 
-    # Change dimensions of last fully connected layer to be output dim 5
-    # initialize weights from uniform random distribution
-    old_fc_weight = checkpoint['model_state_dict']['model.18.weight']
-    old_fc_bias = checkpoint['model_state_dict']['model.18.bias']
-    #new_fc_weight = torch.nn.init.uniform_(torch.zeros([3,128]), -0.2, 0.2).to(device)
-    #new_fc_bias = torch.nn.init.uniform_(torch.zeros([3]), -0.2, 0.2).to(device)
-    new_fc_weight = torch.zeros([3,128]).to(device)
-    new_fc_bias = torch.zeros([3]).to(device)
-    checkpoint['model_state_dict']['model.18.weight'] = torch.cat([old_fc_weight, new_fc_weight], 0).to(device)
-    checkpoint['model_state_dict']['model.18.bias'] = torch.cat([old_fc_bias, new_fc_bias], 0).to(device)
-    
-    CNNModel.load_state_dict(checkpoint['model_state_dict'])
-    #optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+      # Change dimensions of last fully connected layer to be output dim 5
+      # initialize weights from uniform random distribution
+      old_fc_weight = checkpoint['model_state_dict']['model.18.weight']
+      old_fc_bias = checkpoint['model_state_dict']['model.18.bias']
+      #new_fc_weight = torch.nn.init.uniform_(torch.zeros([3,128]), -0.2, 0.2).to(device)
+      #new_fc_bias = torch.nn.init.uniform_(torch.zeros([3]), -0.2, 0.2).to(device)
+      new_fc_weight = torch.zeros([3,128]).to(device)
+      new_fc_bias = torch.zeros([3]).to(device)
+      checkpoint['model_state_dict']['model.18.weight'] = torch.cat([old_fc_weight, new_fc_weight], 0).to(device)
+      checkpoint['model_state_dict']['model.18.bias'] = torch.cat([old_fc_bias, new_fc_bias], 0).to(device)
+      
+      CNNModel.load_state_dict(checkpoint['model_state_dict'])
+
+  # Log files for losses
+  loss_file         = checkpoint_dir+ "trn_loss.txt"
+  val_loss_file     = checkpoint_dir+ "val_loss.txt"
+  best_loss_file    = checkpoint_dir+ "best_loss.tar"
+  end_loss_file     = checkpoint_dir+ "end_loss.tar"
+
+  # Make model directory if one does not exist
+  os.makedirs(checkpoint_dir, exist_ok=True)
 
   # Training
   losses = []
@@ -186,7 +217,6 @@ def train_model(CNNModel, KFModel, optimizer, loss_function, lr=1e-4, starting_e
     # Save the best model after each epoch based on the lowest achieved validation loss
     if lowest_loss is None or lowest_loss > val_loss:
       lowest_loss = val_loss
-      model_name = 'log/' + start_time_str + '_' + lr_str  + '_bestloss_feed_forward.tar'
       torch.save({
                   "epoch": epoch,
                   "cnn_model_state_dict": CNNModel.state_dict(),
@@ -194,7 +224,8 @@ def train_model(CNNModel, KFModel, optimizer, loss_function, lr=1e-4, starting_e
                   "optimizer_state_dict": optimizer.state_dict(),
                   "loss": loss.item(),
                   "batch_size": batch_size,
-                  }, model_name)
+                  }, best_loss_file)
+      print("Saved model with best validation loss so far to: "+ best_loss_file)
 
   # Finish up. End of training
   print('elapsed time: {}'.format(time.time() - start_time))
@@ -206,8 +237,8 @@ def train_model(CNNModel, KFModel, optimizer, loss_function, lr=1e-4, starting_e
               "optimizer_state_dict": optimizer.state_dict(),
               "loss": loss.item(),
               "batch_size": batch_size,
-              }, model_name)
-  print('saved model: '+ model_name)
+              }, end_loss_file)
+  print("Saved final epoch model to: "+ end_loss_file)
 
 
 def validation_loss(CNNModel, KFModel, val_dataloader, loss_function):
@@ -266,7 +297,7 @@ def main():
  
   for learning_rate in learning_rates:
     optimizer = torch.optim.Adam(list(CNNModel.parameters()) + list(KFModel.parameters()), lr=learning_rate, betas=(0.9, 0.999), eps=1e-08, weight_decay=0, amsgrad=False)
-    train_model(CNNModel, KFModel, optimizer, loss_function, lr=learning_rate, starting_epoch=-1, train_dataloader=train_dataloader, val_dataloader=val_dataloader)
+    train_model(CNNModel, KFModel, optimizer, loss_function, lr=learning_rate, starting_epoch=-1, train_dataloader=train_dataloader, val_dataloader=val_dataloader, checkpoint_dir=checkpoint_dir)
 
 if __name__ == "__main__":
   main()

@@ -18,7 +18,6 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
 import statistics
-from synth_vis_state_est_data_generator import SynthVisStateEstDataGenerator
 from matplotlib import pyplot as plt
 
 from models.feed_forward_cnn_model import FeedForwardCNN
