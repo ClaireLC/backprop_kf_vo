@@ -147,12 +147,12 @@ def compute_err(x, y, theta, for_vel, ang_vel, times, obs, seq_length):
   times: list of timesteps
   seq_length: number of timesteps of sequence to calculate error over
   """
-  trans_err = 0
-  rot_err = 0
+  trans_errs = []
+  rot_errs = []
 
   sig_init = np.identity(5)
 
-  for start_ind in tqdm(range(len(times) - seq_length + 1)):
+  for start_ind in tqdm(range(0, len(times) - seq_length + 1, seq_length)):
     # Set initial state at start_ind
     #print("start ind {}".format(start_ind))
     mu_init = np.array([
@@ -205,12 +205,12 @@ def compute_err(x, y, theta, for_vel, ang_vel, times, obs, seq_length):
                                   ])
     abs_rot_err = abs(mu[-1,2] - curr_seq_theta[-1])
 
-    trans_err += (abs_trans_err / dist)
-    rot_err   += (abs_rot_err / dist)
+    trans_errs.append(abs_trans_err / dist)
+    rot_errs.append(abs_rot_err / dist)
 
   # Average error over number of sequences
-  trans_err /= (len(times) - seq_length + 1)
-  rot_err   /= (len(times) - seq_length + 1)
+  trans_err = sum(trans_errs) / len(trans_errs)
+  rot_err   = sum(rot_errs) / len(rot_errs)
 
   return trans_err, rot_err
 
