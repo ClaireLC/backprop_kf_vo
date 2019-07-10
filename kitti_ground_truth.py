@@ -24,6 +24,7 @@ def get_poses(traj_num_str):
       y.append(row[y_ind])
 
       # Get theta from pose transformation matrix
+      # Add 90 degrees to transpose to world frame
       if np.arcsin(row[0]) > 0:
         theta.append(np.arccos(row[0]) + np.pi/2)
       else:
