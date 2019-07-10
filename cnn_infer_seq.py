@@ -13,7 +13,6 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
 import statistics
-from synth_vis_state_est_data_generator import SynthVisStateEstDataGenerator
 from matplotlib import pyplot as plt
 
 from models.feed_forward_cnn_model import FeedForwardCNN
@@ -22,12 +21,18 @@ from kitti_dataset import KittiDataset, ToTensor, SequenceSampler
 from kitti_dataset_seq import KittiDatasetSeq
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--checkpoint', dest='checkpoint', default='', help='model checkpoint')
-parser.add_argument('--save', dest='save', default='./cnn_results/', help='save location')
+parser.add_argument('--load', dest='load', default='', help='Path to model directory')
+parser.add_argument('--save', dest='save', default='./cnn_results/', help='Inference results save location')
 parser.add_argument("--traj_num", dest='traj_num', default='0', help="Trajectory number")
+parser.add_argument("--mode", dest='mode', default='whole', choices=["plot", "error"], help="Mode for inference, either for plotting results or error calculation")
 
 args = parser.parse_args()
-os.makedirs(args.save, exist_ok=True)
+
+# Make results directory
+# Extract model name from path to model directory
+model_name = args.load.replace("log/","")
+save_dir = args.save + model_name
+os.makedirs(save_dir, exist_ok=True)
 
 # Device specification
 #device = torch.device('cuda')
@@ -41,7 +46,7 @@ SEQ_DIR = "/mnt/disks/dataset/dataset_post/sequences/"
 POSES_DIR = "/mnt/disks/dataset/dataset_post/poses/"
 OXTS_DIR = "/mnt/disks/dataset/dataset_post/oxts/"
 
-def infer(model_path, sequence_num, camera_num):
+def infer(model_path, sequence_num, camera_num, mode):
   """
   Loads a model and infers velocities from once sequence of data
   model_path: path to model
@@ -68,32 +73,35 @@ def infer(model_path, sequence_num, camera_num):
   # Construct loss function
   loss_function = torch.nn.MSELoss(reduction='sum')
 
-  # Create dataset
-  seq_length = 100
-  #seq_dataset = KittiDatasetSeq(SEQ_DIR, POSES_DIR, OXTS_DIR, seq_length, mode="infer")
+  # Create dataset, depending on mode
+  if mode == "plot":
+    # Individual frames dataset
+    dataset = KittiDataset(SEQ_DIR, POSES_DIR, OXTS_DIR, transform=transforms.Compose([ToTensor()]), mode="infer")
+    # Dataset sampler to get one KITTI trajectory from specified camera
+    sampler = SequenceSampler(sequence_num, camera_num)
+    # Dataloader for sequence
+    dataloader = DataLoader(
+                                dataset = dataset,
+                                batch_size = 1,
+                                sampler = sampler,
+                                shuffle = False,
+                                )
+    print(len(dataloader))
+  elif mode == "error":
+    seq_length = 100
+    seq_dataset = KittiDatasetSeq(SEQ_DIR, POSES_DIR, OXTS_DIR, seq_length, mode="infer")
 
-  # Individual frames dataset
-  dataset = KittiDataset(SEQ_DIR, POSES_DIR, OXTS_DIR, transform=transforms.Compose([ToTensor()]), mode="infer")
-  # Dataset sampler to get one sequence from specified camera
-  sampler = SequenceSampler(sequence_num, camera_num)
-  # Dataloader for sequence
-  dataloader = DataLoader(
-                              dataset = dataset,
-                              batch_size = 1,
-                              sampler = sampler,
-                              shuffle = False,
-                              )
 
-  ## Dataloader for sequence
-  #seq_dataloader = DataLoader(
-  #                            dataset = seq_dataset,
-  #                            batch_size = 1,
-  #                            shuffle = False,
-  #                            )
+    # Dataloader for sequence
+    seq_dataloader = DataLoader(
+                                dataset = seq_dataset,
+                                batch_size = 1,
+                                shuffle = False,
+                                )
 
   # Write csv header
-  results_save_path = args.save + "/kitti_{}.txt".format(sequence_num)
-  with open(results_save_path, mode="a+") as csv_id:
+  results_save_path = save_dir + "/kitti_{}.txt".format(sequence_num)
+  with open(results_save_path, mode="w+") as csv_id:
     writer = csv.writer(csv_id, delimiter=",")
     writer.writerow(["predicted_x", "predicted_y", "predicted_theta"])
 
@@ -119,7 +127,8 @@ def infer(model_path, sequence_num, camera_num):
     if i == 0:
       continue
 
-    print("\nSample number {}".format(i))
+    #torch.cuda.empty_cache()
+    #print("\nSample number {}".format(i))
 
     # Format data
     # (N, 6, 50, 150)
@@ -132,8 +141,7 @@ def infer(model_path, sequence_num, camera_num):
 
     # Create list of prev_time and curr_time to input into KFModel
     times = torch.unsqueeze(torch.cat([prev_time, curr_time], 0),1).type('torch.FloatTensor').to(device)
-    print("times {}".format(times))
-
+    #print("times {}".format(times))
 
     # Forward pass
     # output (N, dim_output)
@@ -153,12 +161,12 @@ def infer(model_path, sequence_num, camera_num):
     # Update prev_time
     prev_time = curr_time
 
-    print("mu {}".format(mu))
+    #print("mu {}".format(mu))
     pose_prediction = mu[:,0:3]
     pose_prediction_array = pose_prediction.data.cpu().numpy()[0]
     pose_array = pose.data.cpu().numpy()[0]
 
-    print(pose_prediction.shape, pose.shape)
+    #print(pose_prediction.shape, pose.shape)
     loss = loss_function(pose_prediction, pose)
 
     # Record loss and error
@@ -168,10 +176,7 @@ def infer(model_path, sequence_num, camera_num):
     error = torch.norm(pose - pose_prediction)
     errors.append(error.item())
 
-    print("Actual: {} Prediction {}".format(pose_array, pose_prediction_array))
-
-    #if i == 100:
-    #  break
+    #print("Actual: {} Prediction {}".format(pose_array, pose_prediction_array))
 
     # Save results to file
     with open(results_save_path, mode="a+") as csv_id:
@@ -184,13 +189,18 @@ def infer(model_path, sequence_num, camera_num):
   print('Testing std  RMS error: {}'.format(np.std(np.sqrt(errors))))
 
 def main():
-  traj_num = args.traj_num
-  print("Running inference on KITTI trajectory {}".format(traj_num))
 
-  model_path = args.checkpoint
+  model_path = args.load + "best_loss.tar"
+  mode = args.mode
+
   camera_num = 2
 
-  infer(model_path, int(traj_num), camera_num)
+  traj_num_str = args.traj_num
+  print("Running inference on KITTI trajectory {}".format(traj_num_str))
+  print("Using model {}".format(model_path))
+  print("Saving results to {}".format(save_dir))
+
+  infer(model_path, int(traj_num_str), camera_num, mode)
 
 if __name__ == "__main__":
   main()
