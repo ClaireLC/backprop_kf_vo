@@ -74,7 +74,7 @@ def infer(model_path, sequence_num, camera_num, mode):
   loss_function = torch.nn.MSELoss(reduction='sum')
 
   # Create dataset, depending on mode
-  if mode == "plot":
+  if mode == "plot" or mode == "error":
     # Individual frames dataset
     dataset = KittiDataset(SEQ_DIR, POSES_DIR, OXTS_DIR, transform=transforms.Compose([ToTensor()]), mode="infer")
     # Dataset sampler to get one KITTI trajectory from specified camera
@@ -86,18 +86,17 @@ def infer(model_path, sequence_num, camera_num, mode):
                                 sampler = sampler,
                                 shuffle = False,
                                 )
-    print(len(dataloader))
-  elif mode == "error":
-    seq_length = 100
-    seq_dataset = KittiDatasetSeq(SEQ_DIR, POSES_DIR, OXTS_DIR, seq_length, mode="infer")
+  #elif mode == "error":
+  #  seq_length = 100
+  #  seq_dataset = KittiDatasetSeq(SEQ_DIR, POSES_DIR, OXTS_DIR, seq_length, mode="val")
 
 
-    # Dataloader for sequence
-    seq_dataloader = DataLoader(
-                                dataset = seq_dataset,
-                                batch_size = 1,
-                                shuffle = False,
-                                )
+  #  # Dataloader for sequence
+  #  seq_dataloader = DataLoader(
+  #                              dataset = seq_dataset,
+  #                              batch_size = 1,
+  #                              shuffle = False,
+  #                              )
 
   # Write csv header
   results_save_path = save_dir + "/kitti_{}.txt".format(sequence_num)
@@ -105,16 +104,12 @@ def infer(model_path, sequence_num, camera_num, mode):
     writer = csv.writer(csv_id, delimiter=",")
     writer.writerow(["predicted_x", "predicted_y", "predicted_theta"])
 
-  # Run inference for each sample in sequence
   losses = []
-  errors = []
-  #start_time = time.time()
+  trans_errors = []
 
   # Get initial state of first frame in sequence
-  # (5)
   init_sample = next(iter(dataloader))
   mu0 = torch.cat([init_sample["pose"],init_sample["vel"]], 1).type('torch.FloatTensor').to(device) 
-  #μ0s = torch.cat([torch.stack(init_sample["pose"],1), torch.stack(init_sample["vel"],1)], 1).float().to(device) 
   prev_time = init_sample["curr_time"].type('torch.FloatTensor').to(device)
   print("Init state: {}".format(mu0))
   print("Init time: {}".format(prev_time))
@@ -122,14 +117,39 @@ def infer(model_path, sequence_num, camera_num, mode):
   mu = mu0
   sig = torch.eye(5).to(device)
 
+  # Run inference for each sample in dataloader
+  # This will be either over entire trajectory (mode = "plot")
+  # or over each sequence of length 100 timesteps (mode = "error")
   for i, sample in enumerate(tqdm(dataloader)):
     # Skip frame 1
     if i == 0:
       continue
 
-    #torch.cuda.empty_cache()
-    #print("\nSample number {}".format(i))
+    ### TEST THIS!! ####
+    # If in error mode,
+    # Every 100 frames, compute absolute error and reset initial conditions
+    if (mode == "error") and (i > 0) and (i%100 == 0):
+      print("Resetting sequence")
+      print("Current frame {}".format(i))
+  
+      # Distance between start and end point
+      dist = torch.norm(mu0[:][0:3] - pose)
+      print("Distance traveled {}".format(dist))
 
+      # Compute absolute translational error
+      trans_error = torch.norm(pose[0:2] - pose_prediction[0:2]) / dist
+      trans_errors.append(trans_error.item())
+      print("Translational error {}".format(trans_error))
+
+      # Reset initial state of first frame in sequence
+      init_sample = next(iter(dataloader))
+      mu0 = torch.cat([init_sample["pose"],init_sample["vel"]], 1).type('torch.FloatTensor').to(device) 
+      prev_time = init_sample["curr_time"].type('torch.FloatTensor').to(device)
+      print("Init state: {}".format(mu0))
+      print("Init time: {}".format(prev_time))
+      
+      continue
+    
     # Format data
     # (N, 6, 50, 150)
     image = torch.cat((sample["curr_im"], sample["diff_im"]), 1).type('torch.FloatTensor').to(device)
@@ -172,10 +192,6 @@ def infer(model_path, sequence_num, camera_num, mode):
     # Record loss and error
     losses.append(loss.item())
 
-    # Compute and record error
-    error = torch.norm(pose - pose_prediction)
-    errors.append(error.item())
-
     #print("Actual: {} Prediction {}".format(pose_array, pose_prediction_array))
 
     # Save results to file
@@ -185,8 +201,8 @@ def infer(model_path, sequence_num, camera_num, mode):
 
   # Finish up
   #print('Elapsed time: {}'.format(time.time() - start_time))
-  print('Testing mean RMS error: {}'.format(np.mean(np.sqrt(errors))))
-  print('Testing std  RMS error: {}'.format(np.std(np.sqrt(errors))))
+  #print('Testing mean RMS error: {}'.format(np.mean(np.sqrt(errors))))
+  #print('Testing std  RMS error: {}'.format(np.std(np.sqrt(errors))))
 
 def main():
 
