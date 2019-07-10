@@ -99,7 +99,10 @@ def infer(model_path, sequence_num, camera_num, mode):
   #                              )
 
   # Write csv header
-  results_save_path = save_dir + "/kitti_{}.txt".format(sequence_num)
+  if mode == "error":
+    results_save_path = save_dir + "/kitti_err_{}.txt".format(sequence_num)
+  else:
+    results_save_path = save_dir + "/kitti_{}.txt".format(sequence_num)
   with open(results_save_path, mode="w+") as csv_id:
     writer = csv.writer(csv_id, delimiter=",")
     writer.writerow(["predicted_x", "predicted_y", "predicted_theta"])
@@ -120,86 +123,93 @@ def infer(model_path, sequence_num, camera_num, mode):
   # Run inference for each sample in dataloader
   # This will be either over entire trajectory (mode = "plot")
   # or over each sequence of length 100 timesteps (mode = "error")
-  for i, sample in enumerate(tqdm(dataloader)):
-    # Skip frame 1
-    if i == 0:
-      continue
+  with torch.no_grad():
+    for i, sample in enumerate(tqdm(dataloader)):
+      # Skip frame 1
+      if i == 0:
+        continue
 
-    ### TEST THIS!! ####
-    # If in error mode,
-    # Every 100 frames, compute absolute error and reset initial conditions
-    if (mode == "error") and (i > 0) and (i%100 == 0):
-      print("Resetting sequence")
-      print("Current frame {}".format(i))
-  
-      # Distance between start and end point
-      dist = torch.norm(mu0[:][0:3] - pose)
-      print("Distance traveled {}".format(dist))
+      ### TEST THIS!! ####
+      # If in error mode,
+      # Every 100 frames, compute absolute error and reset initial conditions
+      if (mode == "error") and (i > 0) and (i%100 == 0):
+        print("Resetting sequence")
+        print("Current frame {}".format(i))
+    
+        # Distance between start and end point
+        print(mu0)
+        print(pose)
+        dist = torch.norm(mu0[:,0:3] - pose)
+        print("Distance traveled {}".format(dist))
 
-      # Compute absolute translational error
-      trans_error = torch.norm(pose[0:2] - pose_prediction[0:2]) / dist
-      trans_errors.append(trans_error.item())
-      print("Translational error {}".format(trans_error))
+        print("Actual: {} Prediction {}".format(pose_array, pose_prediction_array))
 
-      # Reset initial state of first frame in sequence
-      init_sample = next(iter(dataloader))
-      mu0 = torch.cat([init_sample["pose"],init_sample["vel"]], 1).type('torch.FloatTensor').to(device) 
-      prev_time = init_sample["curr_time"].type('torch.FloatTensor').to(device)
-      print("Init state: {}".format(mu0))
-      print("Init time: {}".format(prev_time))
+        # Compute absolute translational error
+        trans_error = torch.norm(pose[0:2] - pose_prediction[0:2]) / dist
+        trans_errors.append(trans_error.item())
+        print("Translational error {}".format(trans_error))
+
+        # Reset initial state of first frame in sequence
+        init_sample = sample
+        mu0 = torch.cat([init_sample["pose"],init_sample["vel"]], 1).type('torch.FloatTensor').to(device) 
+        prev_time = init_sample["curr_time"].type('torch.FloatTensor').to(device)
+        
+        continue
       
-      continue
-    
-    # Format data
-    # (N, 6, 50, 150)
-    image = torch.cat((sample["curr_im"], sample["diff_im"]), 1).type('torch.FloatTensor').to(device)
-    # (N, 3)
-    pose = sample["pose"].type('torch.FloatTensor').to(device)
-    #pose = torch.unsqueeze(sample["pose"],0).type('torch.FloatTensor').to(device)
-    # (T,)
-    curr_time = sample["curr_time"].type('torch.FloatTensor').to(device)
+      # Format data
+      # (N, 6, 50, 150)
+      image = torch.cat((sample["curr_im"], sample["diff_im"]), 1).type('torch.FloatTensor').to(device)
+      # (N, 3)
+      pose = sample["pose"].type('torch.FloatTensor').to(device)
+      #pose = torch.unsqueeze(sample["pose"],0).type('torch.FloatTensor').to(device)
+      # (T,)
+      curr_time = sample["curr_time"].type('torch.FloatTensor').to(device)
 
-    # Create list of prev_time and curr_time to input into KFModel
-    times = torch.unsqueeze(torch.cat([prev_time, curr_time], 0),1).type('torch.FloatTensor').to(device)
-    #print("times {}".format(times))
+      # Create list of prev_time and curr_time to input into KFModel
+      times = torch.unsqueeze(torch.cat([prev_time, curr_time], 0),1).type('torch.FloatTensor').to(device)
+      #print("times {}".format(times))
 
-    # Forward pass
-    # output (N, dim_output)
-    vel_L_prediction = CNNModel(image)
-    
-    #print("CNN predictions {}".format(vel_L_prediction))
-    #print("vels {}".format(vels[0][0]))
+      # Forward pass
+      # output (N, dim_output)
+      vel_L_prediction = CNNModel(image)
+      
+      #print("CNN predictions {}".format(vel_L_prediction))
+      #print("vels {}".format(vels[0][0]))
 
-    # Add dimension to vel_L_prediction
-    vel_L_prediction = vel_L_prediction.view(1, 1, vel_L_prediction.shape[1])
+      # Add dimension to vel_L_prediction
+      vel_L_prediction = vel_L_prediction.view(1, 1, vel_L_prediction.shape[1])
 
-    # Pass through KF
-    mu, sig = KFModel(vel_L_prediction, mu, sig, prev_time, curr_time)
-    mu = torch.squeeze(mu,0)
-    sig = torch.squeeze(sig,0)
+      # Pass through KF
+      mu, sig = KFModel(vel_L_prediction, mu, sig, prev_time, curr_time)
+      mu = torch.squeeze(mu,0)
+      sig = torch.squeeze(sig,0)
 
-    # Update prev_time
-    prev_time = curr_time
+      # Update prev_time
+      prev_time = curr_time
 
-    #print("mu {}".format(mu))
-    pose_prediction = mu[:,0:3]
-    pose_prediction_array = pose_prediction.data.cpu().numpy()[0]
-    pose_array = pose.data.cpu().numpy()[0]
+      #print("mu {}".format(mu))
+      pose_prediction = mu[:,0:3]
+      pose_prediction_array = pose_prediction.data.cpu().numpy()[0]
+      pose_array = pose.data.cpu().numpy()[0]
 
-    #print(pose_prediction.shape, pose.shape)
-    loss = loss_function(pose_prediction, pose)
+      #print(pose_prediction.shape, pose.shape)
+      loss = loss_function(pose_prediction, pose)
 
-    # Record loss and error
-    losses.append(loss.item())
+      # Record loss and error
+      #losses.append(loss.item())
 
-    #print("Actual: {} Prediction {}".format(pose_array, pose_prediction_array))
+      #print("Actual: {} Prediction {}".format(pose_array, pose_prediction_array))
 
-    # Save results to file
-    with open(results_save_path, mode="a+") as csv_id:
-      writer = csv.writer(csv_id, delimiter=",")
-      writer.writerow([pose_prediction_array[0], pose_prediction_array[1], pose_prediction_array[2]])
+      # Save results to file
+      with open(results_save_path, mode="a+") as csv_id:
+        writer = csv.writer(csv_id, delimiter=",")
+        writer.writerow([pose_prediction_array[0], pose_prediction_array[1], pose_prediction_array[2]])
 
   # Finish up
+  # Compute average translational error
+  if mode == "error":
+    avg_trans_err = sum(trans_errors)/len(trans_errors)
+    print("Average translational error: {}".format(avg_trans_err))
   #print('Elapsed time: {}'.format(time.time() - start_time))
   #print('Testing mean RMS error: {}'.format(np.mean(np.sqrt(errors))))
   #print('Testing std  RMS error: {}'.format(np.std(np.sqrt(errors))))
