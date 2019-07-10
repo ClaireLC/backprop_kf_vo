@@ -23,8 +23,7 @@ parser.add_argument("--save_plot", default=False, type=bool, help="Saves plot if
 args = parser.parse_args()
 dataset = args.dataset
 traj_nums = args.traj_num
-model_name = args.model_name
-model_name = model_name[0]
+model_names = args.model_name
 save_plot = args.save_plot
 
 def get_ground_truth(dataset, traj_num_str):
@@ -53,7 +52,7 @@ def get_ground_truth(dataset, traj_num_str):
     thetas = data_processor.get_theta()
   return x, y
 
-def get_inferred(dataset, traj_num_str):
+def get_inferred(dataset, model_name, traj_num_str):
   """
   Get inferred poses from cnn_results directory
   """
@@ -70,27 +69,28 @@ def get_inferred(dataset, traj_num_str):
   
   return x_inf, y_inf
 
-def main(dataset, traj_nums, model_name):
+def main(dataset, traj_nums, model_names):
   print("End-to-end results")
 
   for traj_num_str in traj_nums:
-    x, y         = get_ground_truth(dataset, traj_num_str)
-    x_inf, y_inf = get_inferred(dataset, traj_num_str)
-    traj_dict = {
-                "ground truth": {
-                                  "x": x,
-                                  "y": y,
-                                  "color": "r",
-                                },
-                "inferred":     {
-                                  "x": x_inf,
-                                  "y": y_inf,
-                                  "color": "b",
-                                },
-                }
-    plot_results.plot_traj(traj_dict, dataset, traj_num_str, model_name, save_plot)
+    for plt_idx in range(len(model_names)):
+      x, y         = get_ground_truth(dataset, traj_num_str)
+      x_inf, y_inf = get_inferred(dataset, model_names[plt_idx], traj_num_str)
+      traj_dict = {
+                  "ground truth": {
+                                    "x": x,
+                                    "y": y,
+                                    "color": "r",
+                                  },
+                  "inferred":     {
+                                    "x": x_inf,
+                                    "y": y_inf,
+                                    "color": "b",
+                                  },
+                  }
+      plot_results.plot_traj(traj_dict, dataset, traj_num_str, model_names[plt_idx], save_plot)
     plt.show(block=False)
   plt.show()
 
 if __name__ == "__main__":
-  main(dataset, traj_nums, model_name)
+  main(dataset, traj_nums, model_names)

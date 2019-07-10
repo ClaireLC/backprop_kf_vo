@@ -23,8 +23,11 @@ parser.add_argument("--model_name", nargs='+', help="name of model. Can be multi
 parser.add_argument("--save_plot", default=False, type=bool, help="Saves plot if set to True")
 args = parser.parse_args()
 dataset = args.dataset
-traj_num = args.traj_num
-model_name = args.model_name
+traj_nums = args.traj_num
+model_names = args.model_name
+save_plot = args.save_plot
+
+err_save_dir = "./traj_error/"
 
 def get_ground_truth(dataset, traj_num_str, model_name):
   """
@@ -151,7 +154,7 @@ def compute_err(x, y, theta, for_vel, ang_vel, times, obs, seq_length):
 
   for start_ind in tqdm(range(len(times) - seq_length + 1)):
     # Set initial state at start_ind
-    print("start ind {}".format(start_ind))
+    #print("start ind {}".format(start_ind))
     mu_init = np.array([
                         x[start_ind],
                         y[start_ind],
@@ -160,7 +163,7 @@ def compute_err(x, y, theta, for_vel, ang_vel, times, obs, seq_length):
                         ang_vel[start_ind],
                        ])
 
-    print("mu init {}".format(mu_init))
+    #print("mu init {}".format(mu_init))
 
     curr_seq_x = x[start_ind:start_ind + seq_length]
     curr_seq_y = y[start_ind:start_ind + seq_length]
@@ -188,12 +191,12 @@ def compute_err(x, y, theta, for_vel, ang_vel, times, obs, seq_length):
       #print()
   
     # Distance from start to end point
-    dist += np.linalg.norm([
+    dist = np.linalg.norm([
                             mu[0,0] - mu[-1,0] ,
                             mu[0,1] - mu[-1,1] ,
                           ])
 
-    print("Total distance traveled over {} steps: {}".format(len(mu),dist))
+    #print("Total distance traveled over {} steps: {}".format(len(mu),dist))
 
     # Get final error, averaged over distance
     abs_trans_err = np.linalg.norm([
@@ -205,29 +208,30 @@ def compute_err(x, y, theta, for_vel, ang_vel, times, obs, seq_length):
     trans_err += (abs_trans_err / dist)
     rot_err   += (abs_rot_err / dist)
 
-    if start_ind == 300:
-      quit()
-    #trans_err += abs_trans_err
-    #rot_err += abs_rot_err
-
   # Average error over number of sequences
   trans_err /= (len(times) - seq_length + 1)
   rot_err   /= (len(times) - seq_length + 1)
 
   return trans_err, rot_err
 
-def main(dataset, traj_num, model_name):
+def main(dataset, traj_nums, model_names):
   print("Kalman filter")
 
   sig_init = np.identity(5)
 
   # Plot trajectories 
-  for traj_num_str in traj_num:
-    data = []
+  for plt_idx in range(len(model_names)):
+    # save error results to csv
+    # write header
+    err_save_fname = err_save_dir + model_names[plt_idx] + ".txt"
+    with open(err_save_fname, mode="w+") as fid:
+      writer = csv.writer(fid, delimiter=",")
+      writer.writerow(["traj_num", "trans_err_gt", "rot_err_gt", "trans_err_inf", "rot_err_gt"])
+  
+    for traj_num_str in traj_nums:
     #plt.figure(figsize=(5 * len(model_name), 5))
-    for plt_idx in range(len(model_name)):
       # Get ground truth
-      x_gt, y_gt, theta_gt, for_vel_gt, ang_vel_gt, times = get_ground_truth(dataset, traj_num_str, model_name[plt_idx])
+      x_gt, y_gt, theta_gt, for_vel_gt, ang_vel_gt, times = get_ground_truth(dataset, traj_num_str, model_names[plt_idx])
 
       # Compute Kalman filter over entire trajectory with ground truth velocities
       mu_init = np.array([
@@ -242,7 +246,7 @@ def main(dataset, traj_num, model_name):
       
       # Compute Kalman filter over entire trajectory with inferred velocities
       # Get inferred velocities
-      for_vel_inf, ang_vel_inf = get_inferred(dataset, traj_num_str, model_name[plt_idx])
+      for_vel_inf, ang_vel_inf = get_inferred(dataset, traj_num_str, model_names[plt_idx])
       obs_inf = np.stack((for_vel_inf, ang_vel_inf), axis = 1)
       mu_inf, sig_inf = compute_kf(mu_init, sig_init, times, obs_inf)
 
@@ -264,11 +268,11 @@ def main(dataset, traj_num, model_name):
                                     "color": "g",
                                   },
                   }
-      plot_results.plot_traj(traj_dict, dataset, traj_num_str, False)
+      plot_results.plot_traj(traj_dict, dataset, traj_num_str, model_names[plt_idx], save_plot)
 
       # Calculate error 
       seq_length = 100 # Number of timesteps of sequence
-      seq_length = len(x_gt)
+      #seq_length = len(x_gt)
 
       # KF with ground truth velocities
       print("Computing error over trajectory with ground truth velocities")
@@ -283,7 +287,7 @@ def main(dataset, traj_num, model_name):
                                             seq_length
                                             )
 
-      print(trans_err_gt)
+      print(trans_err_gt, rot_err_gt)
 
       # KF with ground inferred velocities
       print("Computing error over trajectory with inferred velocities")
@@ -298,9 +302,16 @@ def main(dataset, traj_num, model_name):
                                             seq_length
                                             )
 
-      print(trans_err_inf)
+      print(trans_err_inf, rot_err_inf)
+
+      # Save errors to csv
+      with open(err_save_fname, mode="a+") as fid:
+        writer = csv.writer(fid, delimiter=",")
+        writer.writerow([traj_num_str, trans_err_gt, rot_err_gt, trans_err_inf, rot_err_gt])
+
+      
     plt.show(block=False)
   plt.show()
 
 if __name__ == "__main__":
-  main(dataset, traj_num, model_name)
+  main(dataset, traj_nums, model_names)
