@@ -23,16 +23,19 @@ from kitti_dataset_seq import KittiDatasetSeq
 parser = argparse.ArgumentParser()
 parser.add_argument('--load', dest='load', default='', help='Path to model directory')
 parser.add_argument('--save', dest='save', default='./cnn_results/', help='Inference results save location')
-parser.add_argument("--traj_num", dest='traj_num', default='0', help="Trajectory number")
+parser.add_argument("--traj_num", nargs='+', help="Trajectory number(s). can be multiple separated with space")
 parser.add_argument("--mode", dest='mode', default='whole', choices=["plot", "error"], help="Mode for inference, either for plotting results or error calculation")
 
 args = parser.parse_args()
+traj_nums = args.traj_num
 
 # Make results directory
 # Extract model name from path to model directory
 model_name = args.load.replace("log/","")
 save_dir = args.save + model_name
 os.makedirs(save_dir, exist_ok=True)
+
+err_save_dir = "./traj_error/"
 
 # Device specification
 #device = torch.device('cuda')
@@ -107,8 +110,8 @@ def infer(model_path, sequence_num, camera_num, mode):
     writer = csv.writer(csv_id, delimiter=",")
     writer.writerow(["predicted_x", "predicted_y", "predicted_theta"])
 
-  losses = []
   trans_errors = []
+  rot_errors = []
 
   # Get initial state of first frame in sequence
   init_sample = next(iter(dataloader))
@@ -133,26 +136,33 @@ def infer(model_path, sequence_num, camera_num, mode):
       # If in error mode,
       # Every 100 frames, compute absolute error and reset initial conditions
       if (mode == "error") and (i > 0) and (i%100 == 0):
-        print("Resetting sequence")
-        print("Current frame {}".format(i))
+        #print("Resetting sequence")
+        #print("Current frame {}".format(i))
     
         # Distance between start and end point
-        print(mu0)
-        print(pose)
+        #print(mu0)
+        #print(pose)
         dist = torch.norm(mu0[:,0:3] - pose)
-        print("Distance traveled {}".format(dist))
+        #print("Distance traveled {}".format(dist))
 
-        print("Actual: {} Prediction {}".format(pose_array, pose_prediction_array))
+        #print("Actual: {} Prediction {}".format(pose_array, pose_prediction_array))
 
         # Compute absolute translational error
         trans_error = torch.norm(pose[0:2] - pose_prediction[0:2]) / dist
         trans_errors.append(trans_error.item())
-        print("Translational error {}".format(trans_error))
+        #print("Translational error {}".format(trans_error))
+  
+        # Compute absolute rotational error
+        rot_error = torch.norm(pose[:,2] - pose_prediction[:,2]) / dist
+        rot_errors.append(rot_error.item())
 
         # Reset initial state of first frame in sequence
         init_sample = sample
         mu0 = torch.cat([init_sample["pose"],init_sample["vel"]], 1).type('torch.FloatTensor').to(device) 
         prev_time = init_sample["curr_time"].type('torch.FloatTensor').to(device)
+
+        mu = mu0
+        sig = torch.eye(5).to(device)
         
         continue
       
@@ -191,6 +201,10 @@ def infer(model_path, sequence_num, camera_num, mode):
       pose_prediction = mu[:,0:3]
       pose_prediction_array = pose_prediction.data.cpu().numpy()[0]
       pose_array = pose.data.cpu().numpy()[0]
+  
+      # Make angle between -pi and pi 
+      curr_theta = pose_prediction_array[2]
+      pose_prediction_array[2] = np.arctan2(np.sin(curr_theta), np.cos(curr_theta))
 
       #print(pose_prediction.shape, pose.shape)
       loss = loss_function(pose_prediction, pose)
@@ -206,27 +220,45 @@ def infer(model_path, sequence_num, camera_num, mode):
         writer.writerow([pose_prediction_array[0], pose_prediction_array[1], pose_prediction_array[2]])
 
   # Finish up
-  # Compute average translational error
+  # Compute average errors
   if mode == "error":
     avg_trans_err = sum(trans_errors)/len(trans_errors)
-    print("Average translational error: {}".format(avg_trans_err))
+    avg_rot_err = sum(rot_errors)/len(rot_errors)
+    print("Average translational/rot error: {}/{}".format(avg_trans_err, avg_rot_err))
   #print('Elapsed time: {}'.format(time.time() - start_time))
   #print('Testing mean RMS error: {}'.format(np.mean(np.sqrt(errors))))
   #print('Testing std  RMS error: {}'.format(np.std(np.sqrt(errors))))
+  
+  return avg_trans_err, avg_rot_err
 
 def main():
 
   model_path = args.load + "best_loss.tar"
+  # Load model
+  print("Loading model {}".format(model_path))
+
+  # Set inference mode
   mode = args.mode
 
   camera_num = 2
 
-  traj_num_str = args.traj_num
-  print("Running inference on KITTI trajectory {}".format(traj_num_str))
-  print("Using model {}".format(model_path))
-  print("Saving results to {}".format(save_dir))
+  # Write error csv header
+  err_save_fname = err_save_dir + model_name[:-1] + ".txt"
+  with open(err_save_fname, mode="w+") as fid:
+    writer = csv.writer(fid, delimiter=",")
+    writer.writerow(["traj_num", "trans_err", "rot_err"])
 
-  infer(model_path, int(traj_num_str), camera_num, mode)
+  for traj_num_str in traj_nums:
+    print("Running inference on KITTI trajectory {}".format(traj_num_str))
+    print("Saving results to {}".format(save_dir))
+
+
+    trans_err, rot_err = infer(model_path, int(traj_num_str), camera_num, mode)
+
+    # Save errors to csv
+    with open(err_save_fname, mode="a+") as fid:
+      writer = csv.writer(fid, delimiter=",")
+      writer.writerow([traj_num_str, trans_err, rot_err])
 
 if __name__ == "__main__":
   main()
