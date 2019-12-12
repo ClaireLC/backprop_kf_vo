@@ -1,5 +1,6 @@
 # backprop_kf_vo
 Implementation of backprop kf (Haarnoja, et al) using PyTorch for visual odometry. Trained with KITTI dataset.
+https://drive.google.com/file/d/1HhaRuB3uwX_G0CzJ1n48CCZw35DGVJir/view?usp=sharing
 
 ## Descriptions of files and directories in this repository
 
